@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient.js';
 
 export default function MenuAdminPanel() {
+  const navigate = useNavigate();
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
@@ -78,7 +80,7 @@ export default function MenuAdminPanel() {
         price: Number(newItem.price),
         category: newItem.category.trim(),
         image_url: newItem.image_url.trim(),
-        sort_order: Number(newItem.sort_order) || 0,
+        sort_order: Number(newItem.sort_order || 0),
         is_available: newItem.is_available,
       },
     ]);
@@ -113,7 +115,7 @@ export default function MenuAdminPanel() {
         price: Number(item.price),
         category: item.category,
         image_url: item.image_url,
-        sort_order: Number(item.sort_order) || 0,
+        sort_order: Number(item.sort_order || 0),
         is_available: item.is_available,
       })
       .eq('id', item.id);
@@ -151,13 +153,24 @@ export default function MenuAdminPanel() {
     setDeletingId(null);
   };
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate('/admin/login', { replace: true });
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-7xl mx-auto">
+      <div className="mx-auto max-w-7xl">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Menu Admin Panel</h1>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to="/"
+              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
+            >
+              Storefront
+            </Link>
             <Link
               to="/admin"
               className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
@@ -170,11 +183,17 @@ export default function MenuAdminPanel() {
             >
               Menu
             </Link>
+            <button
+              onClick={handleSignOut}
+              className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
 
         <div className="mb-6 rounded-xl bg-white p-6 shadow">
-          <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="mb-4 flex items-start justify-between gap-4">
             <h2 className="text-xl font-semibold text-gray-800">Add Menu Item</h2>
             <p className="text-sm text-gray-500">Lower sort order shows first.</p>
           </div>
@@ -234,7 +253,9 @@ export default function MenuAdminPanel() {
             <input
               type="checkbox"
               checked={newItem.is_available}
-              onChange={(e) => handleNewItemChange('is_available', e.target.checked)}
+              onChange={(e) =>
+                handleNewItemChange('is_available', e.target.checked)
+              }
               className="h-4 w-4"
             />
             Available
@@ -341,7 +362,9 @@ export default function MenuAdminPanel() {
                       <input
                         type="number"
                         value={item.sort_order ?? 0}
-                        onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
+                        onChange={(e) =>
+                          handleChange(item.id, 'sort_order', e.target.value)
+                        }
                         className="w-24 rounded-md border border-gray-300 px-3 py-2 text-center"
                       />
                     </td>
