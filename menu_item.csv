@@ -1,0 +1,5 @@
+name,price,category,image_url,is_available
+Spaghetti,12.99,Pasta,,true
+Burger,9.99,Fast Food,,true
+Chicken Adobo,10.99,Filipino,,true
+Chicken Biryani,11.99,Indian,,true
