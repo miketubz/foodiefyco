@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 const qrMap = {
   GCASH: new URL('../../pix/gcashqr.png', import.meta.url).href,
-  GOtyme: new URL('../../pix/GOtyme.jpg', import.meta.url).href,
+  GOtyme: new URL('../../pix/OLDtymeqr.jpg', import.meta.url).href,
   UnionBank: new URL('../../pix/unionbankqr.jpg', import.meta.url).href,
 };
 
