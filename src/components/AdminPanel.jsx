@@ -222,12 +222,18 @@ export const AdminPanel = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
+        <div className="mb-6 flex flex-col gap-4 lg:mb-8 lg:flex-row lg:items-center lg:justify-between">
+          <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Admin Panel</h1>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
+            <Link
+              to="/"
+              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
+            >
+              Storefront
+            </Link>
             <Link
               to="/admin"
               className="rounded-md bg-gray-900 px-4 py-2 text-white"
@@ -249,10 +255,10 @@ export const AdminPanel = () => {
           </div>
         </div>
 
-        <div className="mb-6 rounded-lg bg-white p-6 shadow">
+        <div className="mb-6 rounded-lg bg-white p-4 shadow sm:p-6">
           <h2 className="mb-4 text-xl font-semibold text-gray-800">Fetch Orders</h2>
 
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">
                 Start Date
@@ -324,8 +330,8 @@ export const AdminPanel = () => {
         </div>
 
         {orders.length > 0 && (
-          <div className="rounded-lg bg-white p-6 shadow">
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
+            <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-gray-800">
                   Orders ({filteredOrders.length})
@@ -337,7 +343,7 @@ export const AdminPanel = () => {
                 )}
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
                   onClick={handleClearCompletedOrders}
                   disabled={clearingCompleted || completedCount === 0}
@@ -365,7 +371,133 @@ export const AdminPanel = () => {
               />
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="space-y-4 md:hidden">
+              {filteredOrders.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-300 p-6 text-center text-gray-500">
+                  No orders matched your search.
+                </div>
+              ) : (
+                filteredOrders.map((order) => {
+                  const isExpanded = expandedOrderId === order.orderId;
+
+                  return (
+                    <div
+                      key={order.orderId}
+                      className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-gray-500">{order.orderDate}</p>
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {order.customerName}
+                          </h3>
+                        </div>
+                        <span
+                          className={`rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(
+                            order.status
+                          )}`}
+                        >
+                          {order.status}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2 text-sm text-gray-700">
+                        <p><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
+                        <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
+                        <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
+                        <p><span className="font-semibold">Items:</span> {order.itemsSummary || 'No items'}</p>
+                        <p><span className="font-semibold">Item Count:</span> {order.itemCount}</p>
+                        <p><span className="font-semibold">Total:</span> ₱{Number(order.totalAmount).toFixed(2)}</p>
+                      </div>
+
+                      <div className="mt-4">
+                        <label className="mb-2 block text-sm font-medium text-gray-700">
+                          Status
+                        </label>
+                        <select
+                          value={order.status}
+                          onChange={(e) =>
+                            handleStatusChange(order.orderId, e.target.value)
+                          }
+                          disabled={savingOrderId === order.orderId}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() =>
+                            setExpandedOrderId(isExpanded ? null : order.orderId)
+                          }
+                          className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800"
+                        >
+                          {isExpanded ? 'Hide' : 'View'}
+                        </button>
+                        <button
+                          onClick={() => handlePrintReceipt(order)}
+                          className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700"
+                        >
+                          Print
+                        </button>
+                        <button
+                          onClick={() => handlePdfReceipt(order)}
+                          className="rounded-md bg-purple-600 px-3 py-2 text-white hover:bg-purple-700"
+                        >
+                          PDF
+                        </button>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="mt-4 space-y-4 rounded-lg bg-gray-50 p-4">
+                          <div>
+                            <h4 className="mb-2 font-semibold text-gray-800">Order Details</h4>
+                            <div className="space-y-2 text-sm text-gray-700">
+                              <p><span className="font-semibold">Order ID:</span> {order.orderId}</p>
+                              <p><span className="font-semibold">Date Ordered:</span> {order.orderDate}</p>
+                              <p><span className="font-semibold">Customer:</span> {order.customerName}</p>
+                              <p><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
+                              <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
+                              <p><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
+                              <p><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className="mb-2 font-semibold text-gray-800">Ordered Items</h4>
+                            {order.orderItems.length > 0 ? (
+                              <div className="space-y-3">
+                                {order.orderItems.map((item, index) => (
+                                  <div
+                                    key={`${order.orderId}-mobile-${index}`}
+                                    className="flex items-start justify-between border-b border-gray-200 pb-2"
+                                  >
+                                    <div>
+                                      <p className="font-medium text-gray-800">{item.name}</p>
+                                      <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                                    </div>
+                                    <p className="font-semibold text-gray-800">
+                                      ₱{Number(item.subtotal).toFixed(2)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500">No items found.</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[1550px] text-sm">
                 <thead className="border-b bg-gray-100">
                   <tr>
@@ -458,7 +590,7 @@ export const AdminPanel = () => {
                           {isExpanded && (
                             <tr className="border-b bg-gray-50">
                               <td colSpan="10" className="px-6 py-4">
-                                <div className="grid gap-4 md:grid-cols-2">
+                                <div className="grid gap-4 lg:grid-cols-2">
                                   <div className="rounded-lg border border-gray-200 bg-white p-4">
                                     <h3 className="mb-3 font-semibold text-gray-800">
                                       Order Details

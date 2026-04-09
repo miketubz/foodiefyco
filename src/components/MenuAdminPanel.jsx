@@ -1,15 +1,16 @@
+
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient.js';
 
 export default function MenuAdminPanel() {
   const navigate = useNavigate();
-
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [newItem, setNewItem] = useState({
@@ -80,7 +81,7 @@ export default function MenuAdminPanel() {
         price: Number(newItem.price),
         category: newItem.category.trim(),
         image_url: newItem.image_url.trim(),
-        sort_order: Number(newItem.sort_order || 0),
+        sort_order: Number(newItem.sort_order) || 0,
         is_available: newItem.is_available,
       },
     ]);
@@ -115,7 +116,7 @@ export default function MenuAdminPanel() {
         price: Number(item.price),
         category: item.category,
         image_url: item.image_url,
-        sort_order: Number(item.sort_order || 0),
+        sort_order: Number(item.sort_order) || 0,
         is_available: item.is_available,
       })
       .eq('id', item.id);
@@ -154,17 +155,25 @@ export default function MenuAdminPanel() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    setSigningOut(true);
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      setError(error.message);
+      setSigningOut(false);
+      return;
+    }
+
     navigate('/admin/login', { replace: true });
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="min-h-screen bg-gray-100 p-4 sm:p-6">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">Menu Admin Panel</h1>
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Menu Admin Panel</h1>
 
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <Link
               to="/"
               className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
@@ -185,20 +194,21 @@ export default function MenuAdminPanel() {
             </Link>
             <button
               onClick={handleSignOut}
-              className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+              disabled={signingOut}
+              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100 disabled:bg-gray-200"
             >
-              Sign Out
+              {signingOut ? 'Signing Out...' : 'Sign Out'}
             </button>
           </div>
         </div>
 
-        <div className="mb-6 rounded-xl bg-white p-6 shadow">
-          <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="mb-6 rounded-xl bg-white p-4 shadow sm:p-6">
+          <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-semibold text-gray-800">Add Menu Item</h2>
             <p className="text-sm text-gray-500">Lower sort order shows first.</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
             <input
               type="text"
               placeholder="Name"
@@ -253,9 +263,7 @@ export default function MenuAdminPanel() {
             <input
               type="checkbox"
               checked={newItem.is_available}
-              onChange={(e) =>
-                handleNewItemChange('is_available', e.target.checked)
-              }
+              onChange={(e) => handleNewItemChange('is_available', e.target.checked)}
               className="h-4 w-4"
             />
             Available
@@ -288,99 +296,89 @@ export default function MenuAdminPanel() {
         {loading ? (
           <div className="rounded-lg bg-white p-6 shadow">Loading menu items...</div>
         ) : (
-          <div className="overflow-x-auto rounded-xl bg-white shadow">
-            <table className="w-full min-w-[1300px] text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-4 py-3 text-left">ID</th>
-                  <th className="px-4 py-3 text-left">Name</th>
-                  <th className="px-4 py-3 text-left">Price</th>
-                  <th className="px-4 py-3 text-left">Category</th>
-                  <th className="px-4 py-3 text-left">Image URL</th>
-                  <th className="px-4 py-3 text-center">Preview</th>
-                  <th className="px-4 py-3 text-center">Sort Order</th>
-                  <th className="px-4 py-3 text-center">Available</th>
-                  <th className="px-4 py-3 text-center">Save</th>
-                  <th className="px-4 py-3 text-center">Delete</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} className="border-t align-top">
-                    <td className="px-4 py-3">{item.id}</td>
+          <>
+            <div className="space-y-4 md:hidden">
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm"
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm text-gray-500">Item #{item.id}</p>
+                      <h3 className="text-lg font-semibold text-gray-900">{item.name}</h3>
+                    </div>
 
-                    <td className="px-4 py-3">
-                      <input
-                        type="text"
-                        value={item.name || ''}
-                        onChange={(e) => handleChange(item.id, 'name', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    {item.image_url ? (
+                      <img
+                        src={item.image_url}
+                        alt={item.name}
+                        className="h-16 w-16 rounded-lg object-cover"
                       />
-                    </td>
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400">
+                        No image
+                      </div>
+                    )}
+                  </div>
 
-                    <td className="px-4 py-3">
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={item.price ?? ''}
-                        onChange={(e) => handleChange(item.id, 'price', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2"
-                      />
-                    </td>
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={item.name || ''}
+                      onChange={(e) => handleChange(item.id, 'name', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      placeholder="Name"
+                    />
 
-                    <td className="px-4 py-3">
-                      <input
-                        type="text"
-                        value={item.category || ''}
-                        onChange={(e) => handleChange(item.id, 'category', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2"
-                      />
-                    </td>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={item.price ?? ''}
+                      onChange={(e) => handleChange(item.id, 'price', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      placeholder="Price"
+                    />
 
-                    <td className="px-4 py-3">
-                      <input
-                        type="text"
-                        value={item.image_url || ''}
-                        onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-3 py-2"
-                      />
-                    </td>
+                    <input
+                      type="text"
+                      value={item.category || ''}
+                      onChange={(e) => handleChange(item.id, 'category', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      placeholder="Category"
+                    />
 
-                    <td className="px-4 py-3 text-center">
-                      {item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          className="mx-auto h-14 w-14 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <span className="text-gray-400">No image</span>
-                      )}
-                    </td>
+                    <input
+                      type="text"
+                      value={item.image_url || ''}
+                      onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      placeholder="Image URL"
+                    />
 
-                    <td className="px-4 py-3 text-center">
+                    <div className="grid grid-cols-2 gap-3">
                       <input
                         type="number"
                         value={item.sort_order ?? 0}
-                        onChange={(e) =>
-                          handleChange(item.id, 'sort_order', e.target.value)
-                        }
-                        className="w-24 rounded-md border border-gray-300 px-3 py-2 text-center"
+                        onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                        placeholder="Sort Order"
                       />
-                    </td>
 
-                    <td className="px-4 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={!!item.is_available}
-                        onChange={(e) =>
-                          handleChange(item.id, 'is_available', e.target.checked)
-                        }
-                        className="h-4 w-4"
-                      />
-                    </td>
+                      <label className="flex items-center justify-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={!!item.is_available}
+                          onChange={(e) =>
+                            handleChange(item.id, 'is_available', e.target.checked)
+                          }
+                          className="h-4 w-4"
+                        />
+                        Available
+                      </label>
+                    </div>
 
-                    <td className="px-4 py-3 text-center">
+                    <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => handleSave(item)}
                         disabled={savingId === item.id}
@@ -388,9 +386,7 @@ export default function MenuAdminPanel() {
                       >
                         {savingId === item.id ? 'Saving...' : 'Save'}
                       </button>
-                    </td>
 
-                    <td className="px-4 py-3 text-center">
                       <button
                         onClick={() => handleDelete(item.id)}
                         disabled={deletingId === item.id}
@@ -398,12 +394,127 @@ export default function MenuAdminPanel() {
                       >
                         {deletingId === item.id ? 'Deleting...' : 'Delete'}
                       </button>
-                    </td>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto rounded-xl bg-white shadow md:block">
+              <table className="w-full min-w-[1300px] text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-3 text-left">ID</th>
+                    <th className="px-4 py-3 text-left">Name</th>
+                    <th className="px-4 py-3 text-left">Price</th>
+                    <th className="px-4 py-3 text-left">Category</th>
+                    <th className="px-4 py-3 text-left">Image URL</th>
+                    <th className="px-4 py-3 text-center">Preview</th>
+                    <th className="px-4 py-3 text-center">Sort Order</th>
+                    <th className="px-4 py-3 text-center">Available</th>
+                    <th className="px-4 py-3 text-center">Save</th>
+                    <th className="px-4 py-3 text-center">Delete</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id} className="border-t align-top">
+                      <td className="px-4 py-3">{item.id}</td>
+
+                      <td className="px-4 py-3">
+                        <input
+                          type="text"
+                          value={item.name || ''}
+                          onChange={(e) => handleChange(item.id, 'name', e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={item.price ?? ''}
+                          onChange={(e) => handleChange(item.id, 'price', e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <input
+                          type="text"
+                          value={item.category || ''}
+                          onChange={(e) => handleChange(item.id, 'category', e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <input
+                          type="text"
+                          value={item.image_url || ''}
+                          onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-3 py-2"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        {item.image_url ? (
+                          <img
+                            src={item.image_url}
+                            alt={item.name}
+                            className="mx-auto h-14 w-14 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <span className="text-gray-400">No image</span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="number"
+                          value={item.sort_order ?? 0}
+                          onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
+                          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-center"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!item.is_available}
+                          onChange={(e) =>
+                            handleChange(item.id, 'is_available', e.target.checked)
+                          }
+                          className="h-4 w-4"
+                        />
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleSave(item)}
+                          disabled={savingId === item.id}
+                          className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
+                        >
+                          {savingId === item.id ? 'Saving...' : 'Save'}
+                        </button>
+                      </td>
+
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          disabled={deletingId === item.id}
+                          className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-gray-400"
+                        >
+                          {deletingId === item.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
