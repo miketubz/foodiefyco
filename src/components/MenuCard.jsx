@@ -31,7 +31,7 @@ function MenuCard({ item, onAddToCart }) {
               {item.name}
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              Freshly prepared and ready for delivery.
+              {item.description?.trim() || 'Freshly prepared and ready for delivery.'}
             </p>
           </div>
           <p className="whitespace-nowrap text-lg font-bold text-orange-600">
