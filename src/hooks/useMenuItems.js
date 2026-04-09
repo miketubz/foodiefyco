@@ -14,7 +14,9 @@ export const useMenuItems = () => {
 
         const { data, error } = await supabase
           .from('menu_item')
-          .select('id, name, price, category, image_url, is_available, sort_order')
+          .select(
+            'id, name, description, price, category, image_url, is_available, sort_order'
+          )
           .eq('is_available', true)
           .order('sort_order', { ascending: true })
           .order('id', { ascending: true });
