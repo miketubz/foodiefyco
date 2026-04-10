@@ -6,18 +6,9 @@ import { useMenuItems } from '../hooks/useMenuItems';
 import { supabase } from '../lib/supabaseClient.js';
 
 const PROMO_RULES = {
-  SAVE10: {
-    label: '10% off',
-    getDiscount: (subtotal) => subtotal * 0.1,
-  },
-  LESS50: {
-    label: '₱50 off',
-    getDiscount: (subtotal) => (subtotal >= 200 ? 50 : 0),
-  },
-  FOODIE15: {
-    label: '15% off',
-    getDiscount: (subtotal) => subtotal * 0.15,
-  },
+  SAVE10: { type: 'percent', value: 10 },
+  LESS50: { type: 'fixed', value: 50 },
+  FOODIE15: { type: 'percent', value: 15 },
 };
 
 function FrontendPage() {
@@ -36,7 +27,7 @@ function FrontendPage() {
   const [orderError, setOrderError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const cartSubtotal = useMemo(
+  const subtotal = useMemo(
     () =>
       cartItems.reduce(
         (sum, item) => sum + Number(item.price) * item.quantity,
@@ -45,43 +36,27 @@ function FrontendPage() {
     [cartItems]
   );
 
-  const promoSummary = useMemo(() => {
-    const normalizedCode = promoCode.trim().toUpperCase();
+  const discountAmount = useMemo(() => {
+    const normalizedPromo = promoCode.trim().toUpperCase();
+    const rule = PROMO_RULES[normalizedPromo];
 
-    if (!normalizedCode) {
-      return {
-        isValid: false,
-        code: '',
-        label: '',
-        discountAmount: 0,
-      };
+    if (!rule) return 0;
+
+    if (rule.type === 'percent') {
+      return Number((subtotal * (rule.value / 100)).toFixed(2));
     }
 
-    const rule = PROMO_RULES[normalizedCode];
-
-    if (!rule) {
-      return {
-        isValid: false,
-        code: normalizedCode,
-        label: '',
-        discountAmount: 0,
-      };
+    if (rule.type === 'fixed') {
+      return Math.min(subtotal, Number(rule.value));
     }
 
-    return {
-      isValid: true,
-      code: normalizedCode,
-      label: rule.label,
-      discountAmount: Number(rule.getDiscount(cartSubtotal) || 0),
-    };
-  }, [promoCode, cartSubtotal]);
+    return 0;
+  }, [promoCode, subtotal]);
 
-  const promoError =
-    promoCode.trim() && !promoSummary.isValid
-      ? 'Promo code not recognized.'
-      : '';
-
-  const finalTotal = Math.max(cartSubtotal - promoSummary.discountAmount, 0);
+  const finalTotal = useMemo(
+    () => Math.max(0, Number(subtotal) - Number(discountAmount || 0)),
+    [subtotal, discountAmount]
+  );
 
   const handleAddToCart = (item) => {
     setCartItems((prev) => {
@@ -133,19 +108,17 @@ function FrontendPage() {
     }
 
     if (!paymentMethod) {
-      setOrderError('Please choose a payment method.');
+      setOrderError('Please select a payment method.');
       return;
     }
 
-    if (promoCode.trim() && !promoSummary.isValid) {
-      setOrderError('Please enter a valid promo code or clear it.');
+    const normalizedPromo = promoCode.trim().toUpperCase();
+    if (normalizedPromo && !PROMO_RULES[normalizedPromo]) {
+      setOrderError('Promo code is invalid.');
       return;
     }
 
     setIsSubmitting(true);
-
-    const appliedPromoCode = promoSummary.isValid ? promoSummary.code : null;
-    const discountAmount = promoSummary.isValid ? promoSummary.discountAmount : 0;
 
     const { data: orderData, error: orderErrorResponse } = await supabase
       .from('orders')
@@ -154,9 +127,9 @@ function FrontendPage() {
           customer_name: customerName.trim(),
           phone_number: phoneNumber.trim(),
           delivery_address: deliveryAddress.trim(),
-          special_instructions: specialInstructions.trim() || null,
+          special_instructions: specialInstructions.trim(),
           payment_method: paymentMethod,
-          promo_code: appliedPromoCode,
+          promo_code: normalizedPromo || null,
           discount_amount: discountAmount,
           total_amount: finalTotal,
           status: 'pending',
@@ -197,9 +170,9 @@ function FrontendPage() {
       address: deliveryAddress.trim(),
       specialInstructions: specialInstructions.trim(),
       paymentMethod,
-      promoCode: appliedPromoCode,
+      promoCode: normalizedPromo || 'None',
       discountAmount,
-      subtotal: cartSubtotal,
+      subtotal,
       total: finalTotal,
       itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       items: cartItems.map((item) => ({
@@ -223,49 +196,43 @@ function FrontendPage() {
   const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="min-h-screen bg-[#faf8f5]">
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-gray-50">
       <Navbar cartCount={cartCount} onCartClick={() => setIsCartOpen(true)} />
 
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <section className="mb-8 rounded-[2rem] bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-10 text-white shadow-lg">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-orange-100">
-            FoodiefyCo
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <section className="mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-500 to-amber-400 px-6 py-8 text-white shadow-lg sm:px-10 sm:py-12">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-orange-100">
+            Food delivered to your door
           </p>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-            Fresh meals, quick ordering, smooth delivery.
+          <h1 className="max-w-2xl text-3xl font-bold tracking-tight sm:text-5xl">
+            Fresh comfort food for every craving.
           </h1>
-          <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
-            Browse the menu, add your favorites to cart, and choose the payment
-            method that works best for you.
+          <p className="mt-4 max-w-xl text-sm text-orange-50 sm:text-base">
+            Choose from our best-selling dishes, place your order in minutes,
+            and enjoy fast local delivery.
           </p>
         </section>
 
         {orderError && (
-          <div className="mb-6 rounded-2xl border border-red-300 bg-red-100 p-4 text-red-700">
+          <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-700">
             {orderError}
           </div>
         )}
 
         {orderConfirmation && (
-          <div className="mb-6 rounded-3xl border border-green-300 bg-green-100 p-5 text-green-900 shadow-sm">
+          <div className="mb-6 rounded-3xl border border-green-200 bg-green-50 p-5 text-green-900 shadow-sm">
             <h2 className="mb-2 text-xl font-bold">Order Confirmed</h2>
             <p className="mb-1">Order ID: {orderConfirmation.orderId}</p>
             <p className="mb-1">Name: {orderConfirmation.name}</p>
             <p className="mb-1">Phone: {orderConfirmation.phone}</p>
             <p className="mb-1">Address: {orderConfirmation.address}</p>
             <p className="mb-1">Payment Method: {orderConfirmation.paymentMethod}</p>
-            {orderConfirmation.promoCode && (
-              <p className="mb-1">Promo Code: {orderConfirmation.promoCode}</p>
-            )}
-            {orderConfirmation.specialInstructions && (
-              <p className="mb-1">
-                Special Instructions: {orderConfirmation.specialInstructions}
-              </p>
-            )}
+            <p className="mb-1">Promo Code: {orderConfirmation.promoCode}</p>
             <p className="mb-1">Items: {orderConfirmation.itemCount}</p>
+            <p className="mb-1">Special Instructions: {orderConfirmation.specialInstructions || 'None'}</p>
 
             {orderConfirmation.items && (
-              <div className="mb-3">
+              <div className="mb-3 mt-3">
                 <p className="mb-2 font-semibold">Ordered Items:</p>
                 <ul className="list-disc space-y-1 pl-5">
                   {orderConfirmation.items.map((item, index) => (
@@ -278,25 +245,35 @@ function FrontendPage() {
             )}
 
             <p className="mb-1">Subtotal: ₱{orderConfirmation.subtotal.toFixed(2)}</p>
-            {orderConfirmation.discountAmount > 0 && (
-              <p className="mb-1 text-green-700">
-                Discount: -₱{orderConfirmation.discountAmount.toFixed(2)}
-              </p>
-            )}
-            <p className="mb-3">Total: ₱{orderConfirmation.total.toFixed(2)}</p>
+            <p className="mb-1 text-green-700">Discount: -₱{orderConfirmation.discountAmount.toFixed(2)}</p>
+            <p className="mb-3 font-semibold">Total: ₱{orderConfirmation.total.toFixed(2)}</p>
             <button
               onClick={() => setOrderConfirmation(null)}
-              className="rounded-2xl bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+              className="rounded-xl bg-green-600 px-4 py-2 text-white hover:bg-green-700"
             >
               Close
             </button>
           </div>
         )}
 
+        <section className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-500">
+              Our Menu
+            </p>
+            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+              Choose your favorites
+            </h2>
+          </div>
+          {!loading && !error && (
+            <p className="text-sm text-gray-500">{menuItems.length} available dishes today</p>
+          )}
+        </section>
+
         {loading && <p className="text-gray-600">Loading menu...</p>}
 
         {error && (
-          <div className="mb-4 rounded border border-red-300 bg-red-100 p-4 text-red-700">
+          <div className="mb-4 rounded-xl border border-red-300 bg-red-100 p-4 text-red-700">
             {error}
           </div>
         )}
@@ -332,8 +309,8 @@ function FrontendPage() {
           setPaymentMethod={setPaymentMethod}
           promoCode={promoCode}
           setPromoCode={setPromoCode}
-          promoError={promoError}
-          promoSummary={promoSummary}
+          discountAmount={discountAmount}
+          subtotal={subtotal}
           isSubmitting={isSubmitting}
         />
       )}
