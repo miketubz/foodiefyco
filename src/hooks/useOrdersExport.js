@@ -11,24 +11,28 @@ export const useOrdersExport = () => {
     setError(null);
 
     try {
-      let query = supabase.from('orders').select(`
-        id,
-        created_at,
-        total_amount,
-        status,
-        customer_name,
-        phone_number,
-        delivery_address,
-        special_instructions,
-        payment_method,
-        order_items (
-          quantity,
-          price,
-          menu_item:menu_item_id (
-            name
+      let query = supabase
+        .from('orders')
+        .select(`
+          id,
+          created_at,
+          total_amount,
+          status,
+          customer_name,
+          phone_number,
+          delivery_address,
+          special_instructions,
+          payment_method,
+          promo_code,
+          discount_amount,
+          order_items (
+            quantity,
+            price,
+            menu_item:menu_item_id (
+              name
+            )
           )
-        )
-      `);
+        `);
 
       if (filters?.startDate) {
         query = query.gte('created_at', filters.startDate);
@@ -38,7 +42,7 @@ export const useOrdersExport = () => {
         query = query.lte('created_at', `${filters.endDate}T23:59:59`);
       }
 
-      if (filters?.status && filters.status !== 'all') {
+      if (filters?.status) {
         query = query.eq('status', filters.status);
       }
 
@@ -50,9 +54,8 @@ export const useOrdersExport = () => {
 
       const transformedOrders = (data || []).map((order) => {
         const orderItems = (order.order_items || []).map((item) => ({
-          name: item.menu_item?.name || 'Unknown Item',
+          name: item.menu_item?.name || 'Menu Item',
           quantity: Number(item.quantity || 0),
-          price: Number(item.price || 0),
           subtotal: Number(item.price || 0) * Number(item.quantity || 0),
         }));
 
@@ -62,23 +65,21 @@ export const useOrdersExport = () => {
           phoneNumber: order.phone_number || 'N/A',
           deliveryAddress: order.delivery_address || 'N/A',
           specialInstructions: order.special_instructions || '',
-          paymentMethod: order.payment_method || 'COD',
+          paymentMethod: order.payment_method || '',
+          promoCode: order.promo_code || '',
+          discountAmount: Number(order.discount_amount || 0),
           orderDate: new Date(order.created_at).toLocaleString(),
           totalAmount: Number(order.total_amount || 0),
           itemCount: orderItems.reduce((sum, item) => sum + item.quantity, 0),
-          itemsSummary: orderItems
-            .map((item) => `${item.name} x${item.quantity}`)
-            .join(', '),
-          items: orderItems
-            .map((item) => `${item.name} x${item.quantity}`)
-            .join(', '),
+          itemsSummary: orderItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
           orderItems,
-          status: order.status || 'pending',
+          status: order.status || 'N/A',
         };
       });
 
       setOrders(transformedOrders);
     } catch (err) {
+      console.error('Fetch error:', err);
       setError(err.message || 'Failed to fetch orders');
     } finally {
       setLoading(false);
