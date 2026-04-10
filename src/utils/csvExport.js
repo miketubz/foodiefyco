@@ -1,6 +1,4 @@
-export const generateOrdersCSV = (orders) => {
-  if (!orders.length) return '';
-
+export function generateOrdersCSV(orders = []) {
   const headers = [
     'Order ID',
     'Date Ordered',
@@ -10,55 +8,51 @@ export const generateOrdersCSV = (orders) => {
     'Payment Method',
     'Promo Code',
     'Discount Amount',
-    'Special Instructions',
     'Items',
     'Item Count',
     'Total Amount',
     'Status',
+    'Special Instructions',
   ];
 
-  const escapeCSV = (value) => {
+  const escapeValue = (value) => {
     const stringValue = String(value ?? '');
-    if (
-      stringValue.includes(',') ||
-      stringValue.includes('"') ||
-      stringValue.includes('\n')
-    ) {
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
       return `"${stringValue.replace(/"/g, '""')}"`;
     }
     return stringValue;
   };
 
   const rows = orders.map((order) => [
-    escapeCSV(order.orderId),
-    escapeCSV(order.orderDate),
-    escapeCSV(order.customerName),
-    escapeCSV(order.phoneNumber),
-    escapeCSV(order.deliveryAddress),
-    escapeCSV(order.paymentMethod),
-    escapeCSV(order.promoCode),
+    order.orderId,
+    order.orderDate,
+    order.customerName,
+    order.phoneNumber,
+    order.deliveryAddress,
+    order.paymentMethod,
+    order.promoCode || '',
     Number(order.discountAmount || 0).toFixed(2),
-    escapeCSV(order.specialInstructions),
-    escapeCSV(order.itemsSummary),
+    order.itemsSummary,
     order.itemCount,
     Number(order.totalAmount || 0).toFixed(2),
-    escapeCSV(order.status),
+    order.status,
+    order.specialInstructions || '',
   ]);
 
-  return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
-};
+  return [headers, ...rows]
+    .map((row) => row.map(escapeValue).join(','))
+    .join('\n');
+}
 
-export const downloadCSV = (csvContent, filename = 'orders.csv') => {
+export function downloadCSV(csvContent, filename) {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
 
   link.href = url;
-  link.download = filename;
-  link.style.visibility = 'hidden';
-
+  link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-};
+}
