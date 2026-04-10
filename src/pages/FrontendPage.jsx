@@ -1,14 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import MenuCard from '../components/MenuCard';
 import Cart from '../components/Cart';
 import { useMenuItems } from '../hooks/useMenuItems';
 import { supabase } from '../lib/supabaseClient.js';
 
-const PROMO_RULES = {
-  SAVE10: { type: 'percent', value: 10 },
-  LESS20: { type: 'fixed', value: 20 },
-  FOODIE10: { type: 'percent', value: 10 },
+const emptyPromoState = {
+  normalizedCode: '',
+  isValid: false,
+  discountAmount: 0,
+  message: '',
+  checked: false,
 };
 
 function FrontendPage() {
@@ -26,6 +28,7 @@ function FrontendPage() {
   const [orderConfirmation, setOrderConfirmation] = useState(null);
   const [orderError, setOrderError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [promoValidation, setPromoValidation] = useState(emptyPromoState);
 
   const subtotal = useMemo(
     () =>
@@ -36,22 +39,65 @@ function FrontendPage() {
     [cartItems]
   );
 
-  const discountAmount = useMemo(() => {
-    const normalizedPromo = promoCode.trim().toUpperCase();
-    const rule = PROMO_RULES[normalizedPromo];
+  const validatePromoCode = async (rawCode, currentSubtotal) => {
+    const normalized = rawCode.trim().toUpperCase();
 
-    if (!rule) return 0;
-
-    if (rule.type === 'percent') {
-      return Number((subtotal * (rule.value / 100)).toFixed(2));
+    if (!normalized || currentSubtotal <= 0) {
+      return emptyPromoState;
     }
 
-    if (rule.type === 'fixed') {
-      return Math.min(subtotal, Number(rule.value));
+    const { data, error } = await supabase.rpc('validate_promo_code', {
+      input_code: normalized,
+      cart_subtotal: currentSubtotal,
+    });
+
+    if (error) {
+      return {
+        normalizedCode: normalized,
+        isValid: false,
+        discountAmount: 0,
+        message: error.message || 'Unable to validate promo code.',
+        checked: true,
+      };
     }
 
-    return 0;
+    return {
+      normalizedCode: data?.normalized_code || normalized,
+      isValid: !!data?.valid,
+      discountAmount: Number(data?.discount_amount || 0),
+      message: data?.message || '',
+      checked: true,
+    };
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    if (!promoCode.trim() || subtotal <= 0) {
+      setPromoValidation(emptyPromoState);
+      return () => {
+        active = false;
+      };
+    }
+
+    const timeoutId = setTimeout(async () => {
+      const result = await validatePromoCode(promoCode, subtotal);
+
+      if (active) {
+        setPromoValidation(result);
+      }
+    }, 350);
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+    };
   }, [promoCode, subtotal]);
+
+  const discountAmount = useMemo(
+    () => (promoValidation.isValid ? Number(promoValidation.discountAmount || 0) : 0),
+    [promoValidation]
+  );
 
   const finalTotal = useMemo(
     () => Math.max(0, Number(subtotal) - Number(discountAmount || 0)),
@@ -112,13 +158,25 @@ function FrontendPage() {
       return;
     }
 
-    const normalizedPromo = promoCode.trim().toUpperCase();
-    if (normalizedPromo && !PROMO_RULES[normalizedPromo]) {
-      setOrderError('Promo code is invalid.');
-      return;
+    setIsSubmitting(true);
+
+    let resolvedPromo = emptyPromoState;
+
+    if (promoCode.trim()) {
+      resolvedPromo = await validatePromoCode(promoCode, subtotal);
+
+      if (!resolvedPromo.isValid) {
+        setOrderError(resolvedPromo.message || 'Promo code is invalid.');
+        setIsSubmitting(false);
+        return;
+      }
     }
 
-    setIsSubmitting(true);
+    const resolvedDiscountAmount = resolvedPromo.isValid
+      ? Number(resolvedPromo.discountAmount || 0)
+      : 0;
+
+    const resolvedFinalTotal = Math.max(0, Number(subtotal) - resolvedDiscountAmount);
 
     const { data: orderData, error: orderErrorResponse } = await supabase
       .from('orders')
@@ -129,9 +187,9 @@ function FrontendPage() {
           delivery_address: deliveryAddress.trim(),
           special_instructions: specialInstructions.trim(),
           payment_method: paymentMethod,
-          promo_code: normalizedPromo || null,
-          discount_amount: discountAmount,
-          total_amount: finalTotal,
+          promo_code: resolvedPromo.isValid ? resolvedPromo.normalizedCode : null,
+          discount_amount: resolvedDiscountAmount,
+          total_amount: resolvedFinalTotal,
           status: 'pending',
         },
       ])
@@ -170,10 +228,10 @@ function FrontendPage() {
       address: deliveryAddress.trim(),
       specialInstructions: specialInstructions.trim(),
       paymentMethod,
-      promoCode: normalizedPromo || 'None',
-      discountAmount,
+      promoCode: resolvedPromo.isValid ? resolvedPromo.normalizedCode : 'None',
+      discountAmount: resolvedDiscountAmount,
       subtotal,
-      total: finalTotal,
+      total: resolvedFinalTotal,
       itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       items: cartItems.map((item) => ({
         name: item.name,
@@ -190,6 +248,7 @@ function FrontendPage() {
     setSpecialInstructions('');
     setPaymentMethod('COD');
     setPromoCode('');
+    setPromoValidation(emptyPromoState);
     setIsSubmitting(false);
   };
 
