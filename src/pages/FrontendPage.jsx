@@ -7,8 +7,8 @@ import { supabase } from '../lib/supabaseClient.js';
 
 const PROMO_RULES = {
   SAVE10: { type: 'percent', value: 10 },
-  LESS50: { type: 'fixed', value: 50 },
-  FOODIE15: { type: 'percent', value: 15 },
+  LESS20: { type: 'fixed', value: 20 },
+  FOODIE10: { type: 'percent', value: 10 },
 };
 
 function FrontendPage() {
