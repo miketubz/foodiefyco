@@ -36,7 +36,7 @@ export const AdminPanel = () => {
       return;
     }
 
-    const csvContent = generateOrdersCSV(filteredOrders);
+    const csvContent = generateOrdersCSV(orders);
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(csvContent, `orders_${timestamp}.csv`);
   };
@@ -223,158 +223,156 @@ export const AdminPanel = () => {
     return 'bg-gray-100 text-gray-700';
   };
 
+  const renderExpandedDetails = (order) => (
+    <div className="grid gap-4 md:grid-cols-2">
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Order ID:</span> {order.orderId}</p>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Date Ordered:</span> {order.orderDate}</p>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Customer:</span> {order.customerName}</p>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
+        <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Discount:</span> ₱{Number(order.discountAmount || 0).toFixed(2)}</p>
+        <p className="text-sm text-gray-700"><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-4">
+        <h3 className="mb-3 font-semibold text-gray-800">Ordered Items</h3>
+        {order.orderItems.length > 0 ? (
+          <div className="space-y-3">
+            {order.orderItems.map((item, index) => (
+              <div key={`${order.orderId}-${index}`} className="flex items-start justify-between border-b border-gray-100 pb-2">
+                <div>
+                  <p className="font-medium text-gray-800">{item.name}</p>
+                  <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                </div>
+                <p className="font-semibold text-gray-800">₱{Number(item.subtotal).toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">No items found.</p>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/"
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Storefront
-            </Link>
-            <Link
-              to="/admin"
-              className="rounded-md bg-gray-900 px-4 py-2 text-white"
-            >
-              Orders
-            </Link>
-            <Link
-              to="/admin/menu"
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Menu
-            </Link>
-            <button
-              onClick={handleSignOut}
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Sign Out
-            </button>
+            <Link to="/" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Storefront</Link>
+            <Link to="/admin" className="rounded-md bg-gray-900 px-4 py-2 text-white">Orders</Link>
+            <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Menu</Link>
+            <button onClick={handleSignOut} className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Sign Out</button>
           </div>
         </div>
 
-        <div className="mb-6 rounded-lg bg-white p-4 shadow sm:p-6">
+        <div className="mb-6 rounded-lg bg-white p-6 shadow">
           <h2 className="mb-4 text-xl font-semibold text-gray-800">Fetch Orders</h2>
-
           <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) =>
-                  setFilters({ ...filters, startDate: e.target.value })
-                }
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
+              <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) =>
-                  setFilters({ ...filters, endDate: e.target.value })
-                }
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className="mb-2 block text-sm font-medium text-gray-700">End Date</label>
+              <input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                value={filters.status}
-                onChange={(e) =>
-                  setFilters({ ...filters, status: e.target.value })
-                }
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <label className="mb-2 block text-sm font-medium text-gray-700">Status</label>
+              <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="all">All</option>
                 <option value="pending">Pending</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-
             <div className="flex items-end">
-              <button
-                onClick={handleFetchOrders}
-                disabled={loading}
-                className="w-full rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:bg-gray-400"
-              >
+              <button onClick={handleFetchOrders} disabled={loading} className="w-full rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:bg-gray-400">
                 {loading ? 'Loading...' : 'Fetch Orders'}
               </button>
             </div>
           </div>
 
-          {(error || actionError) && (
-            <div className="rounded border border-red-400 bg-red-100 p-3 text-red-700">
-              {actionError || error}
-            </div>
-          )}
-
-          {successMessage && (
-            <div className="mt-3 rounded border border-green-400 bg-green-100 p-3 text-green-700">
-              {successMessage}
-            </div>
-          )}
+          {(error || actionError) && <div className="rounded border border-red-400 bg-red-100 p-3 text-red-700">{actionError || error}</div>}
+          {successMessage && <div className="mt-3 rounded border border-green-400 bg-green-100 p-3 text-green-700">{successMessage}</div>}
         </div>
 
         {orders.length > 0 && (
-          <div className="rounded-lg bg-white p-4 shadow sm:p-6">
-            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="rounded-lg bg-white p-4 sm:p-6 shadow">
+            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-800">
-                  Orders ({filteredOrders.length})
-                </h2>
-                {searchTerm && (
-                  <p className="mt-1 text-sm text-gray-500">
-                    Showing {filteredOrders.length} of {orders.length} orders
-                  </p>
-                )}
+                <h2 className="text-xl font-semibold text-gray-800">Orders ({filteredOrders.length})</h2>
+                {searchTerm && <p className="mt-1 text-sm text-gray-500">Showing {filteredOrders.length} of {orders.length} orders</p>}
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={handleClearCompletedOrders}
-                  disabled={clearingCompleted || completedCount === 0}
-                  className="rounded-md bg-red-600 px-4 py-2 text-white transition hover:bg-red-700 disabled:bg-gray-400"
-                >
+                <button onClick={handleClearCompletedOrders} disabled={clearingCompleted || completedCount === 0} className="rounded-md bg-red-600 px-4 py-2 text-white transition hover:bg-red-700 disabled:bg-gray-400">
                   {clearingCompleted ? 'Clearing...' : 'Clear Completed Orders'}
                 </button>
-
-                <button
-                  onClick={handleExportCSV}
-                  className="rounded-md bg-green-600 px-4 py-2 text-white transition hover:bg-green-700"
-                >
-                  Export CSV
-                </button>
+                <button onClick={handleExportCSV} className="rounded-md bg-green-600 px-4 py-2 text-white transition hover:bg-green-700">Export CSV</button>
               </div>
             </div>
 
             <div className="mb-4">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Search by customer, phone, address, order ID, item, payment, promo..."
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by customer, phone, address, order ID, item, payment, promo..." className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+
+            <div className="space-y-4 lg:hidden">
+              {filteredOrders.length === 0 ? (
+                <div className="rounded-xl border border-gray-200 p-6 text-center text-gray-500">No orders matched your search.</div>
+              ) : (
+                filteredOrders.map((order) => {
+                  const isExpanded = expandedOrderId === order.orderId;
+                  return (
+                    <div key={order.orderId} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-gray-500">{order.orderDate}</p>
+                          <h3 className="text-lg font-semibold text-gray-900">{order.customerName}</h3>
+                          <p className="text-sm text-gray-600">{order.phoneNumber}</p>
+                        </div>
+                        <span className={`rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
+                      </div>
+
+                      <div className="grid gap-2 text-sm text-gray-700">
+                        <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
+                        <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
+                        <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
+                        <p><span className="font-semibold">Discount:</span> ₱{Number(order.discountAmount || 0).toFixed(2)}</p>
+                        <p><span className="font-semibold">Items:</span> {order.itemsSummary || 'No items'}</p>
+                        <p><span className="font-semibold">Item Count:</span> {order.itemCount}</p>
+                        <p><span className="font-semibold">Total:</span> ₱{Number(order.totalAmount).toFixed(2)}</p>
+                      </div>
+
+                      <div className="mt-4 grid gap-2">
+                        <select value={order.status} onChange={(e) => handleStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                        <div className="grid grid-cols-3 gap-2">
+                          <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800">{isExpanded ? 'Hide' : 'View'}</button>
+                          <button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">Print</button>
+                          <button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-purple-600 px-3 py-2 text-white hover:bg-purple-700">PDF</button>
+                        </div>
+                      </div>
+
+                      {isExpanded && <div className="mt-4">{renderExpandedDetails(order)}</div>}
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div className="hidden overflow-x-auto lg:block">
-              <table className="w-full min-w-[1650px] text-sm">
+              <table className="w-full min-w-[1750px] text-sm">
                 <thead className="border-b bg-gray-100">
                   <tr>
                     <th className="px-4 py-3 text-left">Date Ordered</th>
@@ -394,14 +392,11 @@ export const AdminPanel = () => {
                 <tbody>
                   {filteredOrders.length === 0 ? (
                     <tr>
-                      <td colSpan="12" className="px-4 py-6 text-center text-gray-500">
-                        No orders matched your search.
-                      </td>
+                      <td colSpan="12" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td>
                     </tr>
                   ) : (
                     filteredOrders.map((order) => {
                       const isExpanded = expandedOrderId === order.orderId;
-
                       return (
                         <React.Fragment key={order.orderId}>
                           <tr className="border-b align-top hover:bg-gray-50">
@@ -410,33 +405,15 @@ export const AdminPanel = () => {
                             <td className="px-4 py-3">{order.phoneNumber}</td>
                             <td className="px-4 py-3">{order.deliveryAddress}</td>
                             <td className="px-4 py-3">{order.paymentMethod || 'N/A'}</td>
-                            <td className="px-4 py-3">{order.promoCode || '—'}</td>
-                            <td className="px-4 py-3 text-right">
-                              ₱{Number(order.discountAmount || 0).toFixed(2)}
-                            </td>
+                            <td className="px-4 py-3">{order.promoCode || 'None'}</td>
+                            <td className="px-4 py-3 text-right">₱{Number(order.discountAmount || 0).toFixed(2)}</td>
                             <td className="px-4 py-3">{order.itemsSummary || 'No items'}</td>
                             <td className="px-4 py-3 text-center">{order.itemCount}</td>
-                            <td className="px-4 py-3 text-right font-semibold">
-                              ₱{Number(order.totalAmount).toFixed(2)}
-                            </td>
+                            <td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount).toFixed(2)}</td>
                             <td className="px-4 py-3">
                               <div className="flex flex-col gap-2">
-                                <span
-                                  className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(
-                                    order.status
-                                  )}`}
-                                >
-                                  {order.status}
-                                </span>
-
-                                <select
-                                  value={order.status}
-                                  onChange={(e) =>
-                                    handleStatusChange(order.orderId, e.target.value)
-                                  }
-                                  disabled={savingOrderId === order.orderId}
-                                  className="rounded-md border border-gray-300 px-3 py-2"
-                                >
+                                <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
+                                <select value={order.status} onChange={(e) => handleStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
                                   <option value="pending">Pending</option>
                                   <option value="completed">Completed</option>
                                   <option value="cancelled">Cancelled</option>
@@ -445,35 +422,15 @@ export const AdminPanel = () => {
                             </td>
                             <td className="px-4 py-3 text-center">
                               <div className="flex flex-col gap-2">
-                                <button
-                                  onClick={() =>
-                                    setExpandedOrderId(isExpanded ? null : order.orderId)
-                                  }
-                                  className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800"
-                                >
-                                  {isExpanded ? 'Hide' : 'View'}
-                                </button>
-                                <button
-                                  onClick={() => handlePrintReceipt(order)}
-                                  className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700"
-                                >
-                                  Print
-                                </button>
-                                <button
-                                  onClick={() => handlePdfReceipt(order)}
-                                  className="rounded-md bg-purple-600 px-3 py-2 text-white hover:bg-purple-700"
-                                >
-                                  PDF
-                                </button>
+                                <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800">{isExpanded ? 'Hide' : 'View'}</button>
+                                <button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">Print</button>
+                                <button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-purple-600 px-3 py-2 text-white hover:bg-purple-700">PDF</button>
                               </div>
                             </td>
                           </tr>
-
                           {isExpanded && (
                             <tr className="border-b bg-gray-50">
-                              <td colSpan="12" className="px-6 py-4">
-                                <ExpandedOrderDetails order={order} />
-                              </td>
+                              <td colSpan="12" className="px-6 py-4">{renderExpandedDetails(order)}</td>
                             </tr>
                           )}
                         </React.Fragment>
@@ -483,160 +440,9 @@ export const AdminPanel = () => {
                 </tbody>
               </table>
             </div>
-
-            <div className="space-y-4 lg:hidden">
-              {filteredOrders.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gray-300 p-6 text-center text-gray-500">
-                  No orders matched your search.
-                </div>
-              ) : (
-                filteredOrders.map((order) => {
-                  const isExpanded = expandedOrderId === order.orderId;
-
-                  return (
-                    <div
-                      key={order.orderId}
-                      className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
-                    >
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                            Date Ordered
-                          </p>
-                          <p className="font-semibold text-gray-900">{order.orderDate}</p>
-                        </div>
-                        <span
-                          className={`rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(
-                            order.status
-                          )}`}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-
-                      <div className="grid gap-2 text-sm text-gray-700">
-                        <p><span className="font-semibold">Customer:</span> {order.customerName}</p>
-                        <p><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
-                        <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
-                        <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
-                        <p><span className="font-semibold">Promo Code:</span> {order.promoCode || '—'}</p>
-                        <p><span className="font-semibold">Discount:</span> ₱{Number(order.discountAmount || 0).toFixed(2)}</p>
-                        <p><span className="font-semibold">Items:</span> {order.itemsSummary || 'No items'}</p>
-                        <p><span className="font-semibold">Item Count:</span> {order.itemCount}</p>
-                        <p><span className="font-semibold">Total:</span> ₱{Number(order.totalAmount).toFixed(2)}</p>
-                      </div>
-
-                      <div className="mt-4 space-y-3">
-                        <select
-                          value={order.status}
-                          onChange={(e) => handleStatusChange(order.orderId, e.target.value)}
-                          disabled={savingOrderId === order.orderId}
-                          className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="completed">Completed</option>
-                          <option value="cancelled">Cancelled</option>
-                        </select>
-
-                        <div className="grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() =>
-                              setExpandedOrderId(isExpanded ? null : order.orderId)
-                            }
-                            className="rounded-xl bg-gray-900 px-3 py-2 text-sm font-medium text-white"
-                          >
-                            {isExpanded ? 'Hide' : 'View'}
-                          </button>
-                          <button
-                            onClick={() => handlePrintReceipt(order)}
-                            className="rounded-xl bg-blue-600 px-3 py-2 text-sm font-medium text-white"
-                          >
-                            Print
-                          </button>
-                          <button
-                            onClick={() => handlePdfReceipt(order)}
-                            className="rounded-xl bg-purple-600 px-3 py-2 text-sm font-medium text-white"
-                          >
-                            PDF
-                          </button>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="mt-4">
-                          <ExpandedOrderDetails order={order} />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
           </div>
         )}
       </div>
     </div>
   );
 };
-
-function ExpandedOrderDetails({ order }) {
-  return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Order ID:</span> {order.orderId}
-        </p>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Date Ordered:</span> {order.orderDate}
-        </p>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Customer:</span> {order.customerName}
-        </p>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Phone:</span> {order.phoneNumber}
-        </p>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Address:</span> {order.deliveryAddress}
-        </p>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}
-        </p>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}
-        </p>
-        <p className="mb-2 text-sm text-gray-700">
-          <span className="font-semibold">Discount Amount:</span> ₱{Number(order.discountAmount || 0).toFixed(2)}
-        </p>
-        <p className="text-sm text-gray-700">
-          <span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}
-        </p>
-      </div>
-
-      <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <h3 className="mb-3 font-semibold text-gray-800">Ordered Items</h3>
-
-        {order.orderItems.length > 0 ? (
-          <div className="space-y-3">
-            {order.orderItems.map((item, index) => (
-              <div
-                key={`${order.orderId}-${index}`}
-                className="flex items-start justify-between border-b border-gray-100 pb-2"
-              >
-                <div>
-                  <p className="font-medium text-gray-800">{item.name}</p>
-                  <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                </div>
-                <p className="font-semibold text-gray-800">
-                  ₱{Number(item.subtotal).toFixed(2)}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">No items found.</p>
-        )}
-      </div>
-    </div>
-  );
-}
