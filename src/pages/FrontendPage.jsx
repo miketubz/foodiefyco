@@ -1,17 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import MenuCard from '../components/MenuCard';
 import Cart from '../components/Cart';
 import { useMenuItems } from '../hooks/useMenuItems';
 import { supabase } from '../lib/supabaseClient.js';
-
-const emptyPromoState = {
-  normalizedCode: '',
-  isValid: false,
-  discountAmount: 0,
-  message: '',
-  checked: false,
-};
 
 function FrontendPage() {
   const { menuItems, loading, error } = useMenuItems();
@@ -28,7 +20,6 @@ function FrontendPage() {
   const [orderConfirmation, setOrderConfirmation] = useState(null);
   const [orderError, setOrderError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [promoValidation, setPromoValidation] = useState(emptyPromoState);
 
   const subtotal = useMemo(
     () =>
@@ -39,65 +30,13 @@ function FrontendPage() {
     [cartItems]
   );
 
-  const validatePromoCode = async (rawCode, currentSubtotal) => {
-    const normalized = rawCode.trim().toUpperCase();
+  const discountAmount = useMemo(() => {
+    const normalizedPromo = promoCode.trim().toUpperCase();
 
-    if (!normalized || currentSubtotal <= 0) {
-      return emptyPromoState;
-    }
+    if (!normalizedPromo || subtotal <= 0) return 0;
 
-    const { data, error } = await supabase.rpc('validate_promo_code', {
-      input_code: normalized,
-      cart_subtotal: currentSubtotal,
-    });
-
-    if (error) {
-      return {
-        normalizedCode: normalized,
-        isValid: false,
-        discountAmount: 0,
-        message: error.message || 'Unable to validate promo code.',
-        checked: true,
-      };
-    }
-
-    return {
-      normalizedCode: data?.normalized_code || normalized,
-      isValid: !!data?.valid,
-      discountAmount: Number(data?.discount_amount || 0),
-      message: data?.message || '',
-      checked: true,
-    };
-  };
-
-  useEffect(() => {
-    let active = true;
-
-    if (!promoCode.trim() || subtotal <= 0) {
-      setPromoValidation(emptyPromoState);
-      return () => {
-        active = false;
-      };
-    }
-
-    const timeoutId = setTimeout(async () => {
-      const result = await validatePromoCode(promoCode, subtotal);
-
-      if (active) {
-        setPromoValidation(result);
-      }
-    }, 350);
-
-    return () => {
-      active = false;
-      clearTimeout(timeoutId);
-    };
+    return 0;
   }, [promoCode, subtotal]);
-
-  const discountAmount = useMemo(
-    () => (promoValidation.isValid ? Number(promoValidation.discountAmount || 0) : 0),
-    [promoValidation]
-  );
 
   const finalTotal = useMemo(
     () => Math.max(0, Number(subtotal) - Number(discountAmount || 0)),
@@ -132,6 +71,38 @@ function FrontendPage() {
     );
   };
 
+  const validatePromoCode = async () => {
+    const normalizedPromo = promoCode.trim().toUpperCase();
+
+    if (!normalizedPromo) {
+      return { valid: true, code: null, discountAmount: 0 };
+    }
+
+    const { data, error } = await supabase.rpc('validate_promo_code', {
+      promo_code_input: normalizedPromo,
+      subtotal_input: subtotal,
+    });
+
+    if (error) {
+      return { valid: false, message: 'Unable to validate promo code right now.' };
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+
+    if (!result?.is_valid) {
+      return {
+        valid: false,
+        message: result?.message || 'Promo code is invalid.',
+      };
+    }
+
+    return {
+      valid: true,
+      code: normalizedPromo,
+      discountAmount: Number(result.discount_amount || 0),
+    };
+  };
+
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0 || isSubmitting) return;
 
@@ -160,23 +131,16 @@ function FrontendPage() {
 
     setIsSubmitting(true);
 
-    let resolvedPromo = emptyPromoState;
+    const promoResult = await validatePromoCode();
 
-    if (promoCode.trim()) {
-      resolvedPromo = await validatePromoCode(promoCode, subtotal);
-
-      if (!resolvedPromo.isValid) {
-        setOrderError(resolvedPromo.message || 'Promo code is invalid.');
-        setIsSubmitting(false);
-        return;
-      }
+    if (!promoResult.valid) {
+      setOrderError(promoResult.message);
+      setIsSubmitting(false);
+      return;
     }
 
-    const resolvedDiscountAmount = resolvedPromo.isValid
-      ? Number(resolvedPromo.discountAmount || 0)
-      : 0;
-
-    const resolvedFinalTotal = Math.max(0, Number(subtotal) - resolvedDiscountAmount);
+    const appliedDiscountAmount = Number(promoResult.discountAmount || 0);
+    const finalOrderTotal = Math.max(0, subtotal - appliedDiscountAmount);
 
     const { data: orderData, error: orderErrorResponse } = await supabase
       .from('orders')
@@ -187,9 +151,9 @@ function FrontendPage() {
           delivery_address: deliveryAddress.trim(),
           special_instructions: specialInstructions.trim(),
           payment_method: paymentMethod,
-          promo_code: resolvedPromo.isValid ? resolvedPromo.normalizedCode : null,
-          discount_amount: resolvedDiscountAmount,
-          total_amount: resolvedFinalTotal,
+          promo_code: promoResult.code,
+          discount_amount: appliedDiscountAmount,
+          total_amount: finalOrderTotal,
           status: 'pending',
         },
       ])
@@ -228,10 +192,10 @@ function FrontendPage() {
       address: deliveryAddress.trim(),
       specialInstructions: specialInstructions.trim(),
       paymentMethod,
-      promoCode: resolvedPromo.isValid ? resolvedPromo.normalizedCode : 'None',
-      discountAmount: resolvedDiscountAmount,
+      promoCode: promoResult.code || 'None',
+      discountAmount: appliedDiscountAmount,
       subtotal,
-      total: resolvedFinalTotal,
+      total: finalOrderTotal,
       itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       items: cartItems.map((item) => ({
         name: item.name,
@@ -248,7 +212,6 @@ function FrontendPage() {
     setSpecialInstructions('');
     setPaymentMethod('COD');
     setPromoCode('');
-    setPromoValidation(emptyPromoState);
     setIsSubmitting(false);
   };
 
@@ -259,17 +222,28 @@ function FrontendPage() {
       <Navbar cartCount={cartCount} onCartClick={() => setIsCartOpen(true)} />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <section className="mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-500 to-amber-400 px-6 py-8 text-white shadow-lg sm:px-10 sm:py-12">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-orange-100">
-            Food delivered to your door
-          </p>
-          <h1 className="max-w-2xl text-3xl font-bold tracking-tight sm:text-5xl">
-            Fresh comfort food for every craving.
-          </h1>
-          <p className="mt-4 max-w-xl text-sm text-orange-50 sm:text-base">
-            Choose from our best-selling dishes, place your order in minutes,
-            and enjoy fast local delivery.
-          </p>
+        <section
+          className="relative mb-8 overflow-hidden rounded-[2rem] shadow-lg"
+          style={{
+            backgroundImage:
+              "url('/pix/header.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-black/10" />
+          <div className="relative z-10 px-6 py-10 sm:px-10 sm:py-14 lg:min-h-[340px] lg:px-12 lg:py-16">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-orange-100">
+              Food delivered to your door
+            </p>
+            <h1 className="max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-5xl">
+              Fresh comfort food for every craving.
+            </h1>
+            <p className="mt-4 max-w-xl text-sm text-orange-50 sm:text-base">
+              Choose from our best-selling dishes, place your order in minutes,
+              and enjoy fast local delivery.
+            </p>
+          </div>
         </section>
 
         {orderError && (
