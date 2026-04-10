@@ -5,6 +5,21 @@ import Cart from '../components/Cart';
 import { useMenuItems } from '../hooks/useMenuItems';
 import { supabase } from '../lib/supabaseClient.js';
 
+const PROMO_RULES = {
+  SAVE10: {
+    label: '10% off',
+    getDiscount: (subtotal) => subtotal * 0.1,
+  },
+  LESS50: {
+    label: '₱50 off',
+    getDiscount: (subtotal) => (subtotal >= 200 ? 50 : 0),
+  },
+  FOODIE15: {
+    label: '15% off',
+    getDiscount: (subtotal) => subtotal * 0.15,
+  },
+};
+
 function FrontendPage() {
   const { menuItems, loading, error } = useMenuItems();
   const [cartItems, setCartItems] = useState([]);
@@ -15,10 +30,58 @@ function FrontendPage() {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('COD');
+  const [promoCode, setPromoCode] = useState('');
 
   const [orderConfirmation, setOrderConfirmation] = useState(null);
   const [orderError, setOrderError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const cartSubtotal = useMemo(
+    () =>
+      cartItems.reduce(
+        (sum, item) => sum + Number(item.price) * item.quantity,
+        0
+      ),
+    [cartItems]
+  );
+
+  const promoSummary = useMemo(() => {
+    const normalizedCode = promoCode.trim().toUpperCase();
+
+    if (!normalizedCode) {
+      return {
+        isValid: false,
+        code: '',
+        label: '',
+        discountAmount: 0,
+      };
+    }
+
+    const rule = PROMO_RULES[normalizedCode];
+
+    if (!rule) {
+      return {
+        isValid: false,
+        code: normalizedCode,
+        label: '',
+        discountAmount: 0,
+      };
+    }
+
+    return {
+      isValid: true,
+      code: normalizedCode,
+      label: rule.label,
+      discountAmount: Number(rule.getDiscount(cartSubtotal) || 0),
+    };
+  }, [promoCode, cartSubtotal]);
+
+  const promoError =
+    promoCode.trim() && !promoSummary.isValid
+      ? 'Promo code not recognized.'
+      : '';
+
+  const finalTotal = Math.max(cartSubtotal - promoSummary.discountAmount, 0);
 
   const handleAddToCart = (item) => {
     setCartItems((prev) => {
@@ -70,16 +133,19 @@ function FrontendPage() {
     }
 
     if (!paymentMethod) {
-      setOrderError('Please select a payment method.');
+      setOrderError('Please choose a payment method.');
+      return;
+    }
+
+    if (promoCode.trim() && !promoSummary.isValid) {
+      setOrderError('Please enter a valid promo code or clear it.');
       return;
     }
 
     setIsSubmitting(true);
 
-    const totalAmount = cartItems.reduce(
-      (sum, item) => sum + Number(item.price) * item.quantity,
-      0
-    );
+    const appliedPromoCode = promoSummary.isValid ? promoSummary.code : null;
+    const discountAmount = promoSummary.isValid ? promoSummary.discountAmount : 0;
 
     const { data: orderData, error: orderErrorResponse } = await supabase
       .from('orders')
@@ -88,9 +154,11 @@ function FrontendPage() {
           customer_name: customerName.trim(),
           phone_number: phoneNumber.trim(),
           delivery_address: deliveryAddress.trim(),
-          special_instructions: specialInstructions.trim(),
+          special_instructions: specialInstructions.trim() || null,
           payment_method: paymentMethod,
-          total_amount: totalAmount,
+          promo_code: appliedPromoCode,
+          discount_amount: discountAmount,
+          total_amount: finalTotal,
           status: 'pending',
         },
       ])
@@ -129,7 +197,10 @@ function FrontendPage() {
       address: deliveryAddress.trim(),
       specialInstructions: specialInstructions.trim(),
       paymentMethod,
-      total: totalAmount,
+      promoCode: appliedPromoCode,
+      discountAmount,
+      subtotal: cartSubtotal,
+      total: finalTotal,
       itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       items: cartItems.map((item) => ({
         name: item.name,
@@ -145,52 +216,55 @@ function FrontendPage() {
     setDeliveryAddress('');
     setSpecialInstructions('');
     setPaymentMethod('COD');
+    setPromoCode('');
     setIsSubmitting(false);
   };
 
-  const cartCount = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.quantity, 0),
-    [cartItems]
-  );
+  const cartCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-[#faf8f5]">
       <Navbar cartCount={cartCount} onCartClick={() => setIsCartOpen(true)} />
 
-      <main className="mx-auto max-w-7xl px-6 pb-10 pt-8">
-        <section className="mb-8 rounded-[28px] bg-gradient-to-r from-orange-500 to-amber-400 px-8 py-10 text-white shadow-xl">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.3em] text-orange-100">
-            Food delivered to your door
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <section className="mb-8 rounded-[2rem] bg-gradient-to-r from-orange-500 to-amber-500 px-6 py-10 text-white shadow-lg">
+          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-orange-100">
+            FoodiefyCo
           </p>
-          <h1 className="max-w-2xl text-4xl font-bold leading-tight">
-            Fresh comfort food for every craving.
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+            Fresh meals, quick ordering, smooth delivery.
           </h1>
-          <p className="mt-4 max-w-2xl text-sm text-orange-50 sm:text-base">
-            Choose from our best-selling dishes, place your order in minutes,
-            and enjoy fast local delivery.
+          <p className="mt-3 max-w-2xl text-sm text-orange-50 sm:text-base">
+            Browse the menu, add your favorites to cart, and choose the payment
+            method that works best for you.
           </p>
         </section>
 
         {orderError && (
-          <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-700">
+          <div className="mb-6 rounded-2xl border border-red-300 bg-red-100 p-4 text-red-700">
             {orderError}
           </div>
         )}
 
         {orderConfirmation && (
-          <div className="mb-6 rounded-2xl border border-green-300 bg-green-50 p-5 text-green-900 shadow-sm">
+          <div className="mb-6 rounded-3xl border border-green-300 bg-green-100 p-5 text-green-900 shadow-sm">
             <h2 className="mb-2 text-xl font-bold">Order Confirmed</h2>
             <p className="mb-1">Order ID: {orderConfirmation.orderId}</p>
             <p className="mb-1">Name: {orderConfirmation.name}</p>
             <p className="mb-1">Phone: {orderConfirmation.phone}</p>
             <p className="mb-1">Address: {orderConfirmation.address}</p>
             <p className="mb-1">Payment Method: {orderConfirmation.paymentMethod}</p>
-            <p className="mb-1">
-              Special Instructions: {orderConfirmation.specialInstructions || 'None'}
-            </p>
+            {orderConfirmation.promoCode && (
+              <p className="mb-1">Promo Code: {orderConfirmation.promoCode}</p>
+            )}
+            {orderConfirmation.specialInstructions && (
+              <p className="mb-1">
+                Special Instructions: {orderConfirmation.specialInstructions}
+              </p>
+            )}
             <p className="mb-1">Items: {orderConfirmation.itemCount}</p>
 
-            {orderConfirmation.items?.length > 0 && (
+            {orderConfirmation.items && (
               <div className="mb-3">
                 <p className="mb-2 font-semibold">Ordered Items:</p>
                 <ul className="list-disc space-y-1 pl-5">
@@ -203,57 +277,32 @@ function FrontendPage() {
               </div>
             )}
 
-            <p className="mb-3 font-semibold">
-              Total: ₱{orderConfirmation.total.toFixed(2)}
-            </p>
+            <p className="mb-1">Subtotal: ₱{orderConfirmation.subtotal.toFixed(2)}</p>
+            {orderConfirmation.discountAmount > 0 && (
+              <p className="mb-1 text-green-700">
+                Discount: -₱{orderConfirmation.discountAmount.toFixed(2)}
+              </p>
+            )}
+            <p className="mb-3">Total: ₱{orderConfirmation.total.toFixed(2)}</p>
             <button
               onClick={() => setOrderConfirmation(null)}
-              className="rounded-xl bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+              className="rounded-2xl bg-green-600 px-4 py-2 text-white hover:bg-green-700"
             >
               Close
             </button>
           </div>
         )}
 
-        <section className="mb-6 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-500">
-              Our Menu
-            </p>
-            <h2 className="text-3xl font-bold text-gray-900">Choose your favorites</h2>
-          </div>
-          {!loading && !error && (
-            <p className="text-sm text-gray-500">{menuItems.length} available dishes today</p>
-          )}
-        </section>
-
-        {loading && (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((skeleton) => (
-              <div
-                key={skeleton}
-                className="overflow-hidden rounded-3xl bg-white shadow-md"
-              >
-                <div className="h-56 animate-pulse bg-gray-200" />
-                <div className="space-y-3 p-5">
-                  <div className="h-6 animate-pulse rounded bg-gray-200" />
-                  <div className="h-4 w-1/3 animate-pulse rounded bg-gray-200" />
-                  <div className="h-5 w-1/4 animate-pulse rounded bg-gray-200" />
-                  <div className="h-12 animate-pulse rounded-2xl bg-gray-200" />
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {loading && <p className="text-gray-600">Loading menu...</p>}
 
         {error && (
-          <div className="mb-4 rounded-2xl border border-red-300 bg-red-100 p-4 text-red-700">
+          <div className="mb-4 rounded border border-red-300 bg-red-100 p-4 text-red-700">
             {error}
           </div>
         )}
 
         {!loading && !error && (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
             {menuItems.map((item) => (
               <MenuCard
                 key={item.id}
@@ -281,6 +330,10 @@ function FrontendPage() {
           setSpecialInstructions={setSpecialInstructions}
           paymentMethod={paymentMethod}
           setPaymentMethod={setPaymentMethod}
+          promoCode={promoCode}
+          setPromoCode={setPromoCode}
+          promoError={promoError}
+          promoSummary={promoSummary}
           isSubmitting={isSubmitting}
         />
       )}
