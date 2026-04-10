@@ -159,7 +159,7 @@ function Cart({
                 disabled={isSubmitting}
               />
               <p className="mt-2 text-xs text-gray-500">
-                Available: SAVE10, LESS50, FOODIE15
+                Follow us on Facebook for gifts and codes
               </p>
             </div>
           </div>
