@@ -1,5 +1,5 @@
 export const generateOrdersCSV = (orders) => {
-  if (orders.length === 0) return '';
+  if (!orders.length) return '';
 
   const headers = [
     'Order ID',
@@ -8,6 +8,8 @@ export const generateOrdersCSV = (orders) => {
     'Phone Number',
     'Delivery Address',
     'Payment Method',
+    'Promo Code',
+    'Discount Amount',
     'Special Instructions',
     'Items',
     'Item Count',
@@ -34,8 +36,10 @@ export const generateOrdersCSV = (orders) => {
     escapeCSV(order.phoneNumber),
     escapeCSV(order.deliveryAddress),
     escapeCSV(order.paymentMethod),
+    escapeCSV(order.promoCode),
+    Number(order.discountAmount || 0).toFixed(2),
     escapeCSV(order.specialInstructions),
-    escapeCSV(order.itemsSummary || order.items),
+    escapeCSV(order.itemsSummary),
     order.itemCount,
     Number(order.totalAmount || 0).toFixed(2),
     escapeCSV(order.status),
@@ -46,8 +50,8 @@ export const generateOrdersCSV = (orders) => {
 
 export const downloadCSV = (csvContent, filename = 'orders.csv') => {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
 
   link.href = url;
   link.download = filename;
