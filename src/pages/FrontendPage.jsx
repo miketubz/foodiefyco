@@ -226,7 +226,7 @@ function FrontendPage() {
           className="relative mb-8 overflow-hidden rounded-[2rem] shadow-lg"
           style={{
             backgroundImage:
-              "url('/pix/header.jpg')",
+              "url('https://ieqpalamjvxxwxjupwnv.supabase.co/storage/v1/object/public/food-images/header.jpg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
