@@ -226,7 +226,7 @@ function FrontendPage() {
           className="relative mb-8 overflow-hidden rounded-[2rem] shadow-lg"
           style={{
             backgroundImage:
-              "url('/pix/header.png')",
+              "url('/pix/header.jpg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
