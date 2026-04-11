@@ -212,7 +212,7 @@ function FrontendPage() {
         <section
           className="relative mb-8 overflow-hidden rounded-[2rem] px-6 py-10 text-white shadow-lg sm:px-10 sm:py-14"
           style={{
-            backgroundImage: "url('pix/header2.jpg')",
+            backgroundImage: "url('/pix/header2.jpg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }}
