@@ -38,7 +38,6 @@ export const AdminPanel = () => {
 
   const fetchTodaySummary = async () => {
     const { start, end } = getTodayBounds();
-
     const { data, error: summaryError } = await supabase
       .from('orders')
       .select('id, total_amount, status')
@@ -85,38 +84,29 @@ export const AdminPanel = () => {
       startDate = formatDateInput(now);
       endDate = formatDateInput(now);
     }
-
     if (type === 'yesterday') {
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
       startDate = formatDateInput(yesterday);
       endDate = formatDateInput(yesterday);
     }
-
     if (type === 'last7') {
       const start = new Date(now);
       start.setDate(now.getDate() - 6);
       startDate = formatDateInput(start);
       endDate = formatDateInput(now);
     }
-
     if (type === 'thisMonth') {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       startDate = formatDateInput(start);
       endDate = formatDateInput(now);
     }
-
     if (type === 'all') {
       startDate = '';
       endDate = '';
     }
 
-    const nextFilters = {
-      ...filters,
-      startDate,
-      endDate,
-    };
-
+    const nextFilters = { ...filters, startDate, endDate };
     setFilters(nextFilters);
     await runFetch(nextFilters);
   };
@@ -126,7 +116,6 @@ export const AdminPanel = () => {
       alert('No orders to export');
       return;
     }
-
     const csvContent = generateOrdersCSV(orders);
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(csvContent, `orders_${timestamp}.csv`);
@@ -176,7 +165,6 @@ export const AdminPanel = () => {
 
   const handleClearCompletedOrders = async () => {
     const completedOrders = orders.filter((order) => order.status === 'completed');
-
     if (completedOrders.length === 0) {
       alert('No completed orders to clear.');
       return;
@@ -190,7 +178,6 @@ export const AdminPanel = () => {
     setSuccessMessage('');
 
     const ids = completedOrders.map((order) => order.orderId);
-
     const { error: deleteError } = await supabase.from('orders').delete().in('id', ids);
 
     if (deleteError) {
@@ -211,6 +198,8 @@ export const AdminPanel = () => {
       alert('Please allow popups to print the receipt.');
       return;
     }
+
+    const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
 
     const itemRows = (order.orderItems || [])
       .map(
@@ -243,7 +232,7 @@ export const AdminPanel = () => {
               <p><strong>Address:</strong> ${order.deliveryAddress}</p>
               <p><strong>Payment Method:</strong> ${order.paymentMethod || 'Not specified'}</p>
               <p><strong>Payment Status:</strong> ${order.paymentStatus || 'unpaid'}</p>
-              <p><strong>Status:</strong> ${order.status}</p>
+              <p><strong>Promo Code:</strong> ${order.promoCode || 'None'}</p>
               <p><strong>Special Instructions:</strong> ${order.specialInstructions || 'None'}</p>
             </div>
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -258,7 +247,11 @@ export const AdminPanel = () => {
                 ${itemRows || '<tr><td colspan="3" style="padding: 10px;">No items found.</td></tr>'}
               </tbody>
             </table>
-            <p style="font-size: 18px; text-align: right;"><strong>Total: ₱${Number(order.totalAmount || 0).toFixed(2)}</strong></p>
+            <div style="margin-top: 20px; text-align: right;">
+              <p><strong>Subtotal:</strong> ₱${subtotalBeforeDiscount.toFixed(2)}</p>
+              <p><strong>Discount:</strong> -₱${Number(order.discountAmount || 0).toFixed(2)}</p>
+              <p style="font-size: 18px;"><strong>Total: ₱${Number(order.totalAmount || 0).toFixed(2)}</strong></p>
+            </div>
           </div>
           <script>window.onload = function () { window.print(); };</script>
         </body>
@@ -286,7 +279,6 @@ export const AdminPanel = () => {
         filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
 
       if (!matchesPaymentStatus) return false;
-
       if (!term) return true;
 
       const orderItemText = (order.orderItems || [])
@@ -302,6 +294,8 @@ export const AdminPanel = () => {
         order.deliveryAddress,
         order.paymentMethod,
         order.paymentStatus,
+        order.promoCode,
+        order.discountAmount,
         order.itemsSummary,
         order.specialInstructions,
         order.status,
@@ -460,7 +454,7 @@ export const AdminPanel = () => {
               </div>
 
               <div className="mb-4">
-                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by customer, phone, address, order ID, item, payment..." className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by customer, phone, address, order ID, item, payment, promo..." className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
               <div className="space-y-4 md:hidden">
@@ -469,6 +463,8 @@ export const AdminPanel = () => {
                 ) : (
                   filteredOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.orderId;
+                    const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+
                     return (
                       <div key={order.orderId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                         <div className="mb-3 flex items-start justify-between gap-3">
@@ -486,6 +482,9 @@ export const AdminPanel = () => {
                         <div className="mb-3 grid grid-cols-1 gap-2 text-sm text-gray-700">
                           <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                           <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
+                          <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
+                          <p><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
+                          <p><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p>
                           <p><span className="font-semibold">Items:</span> {order.itemsSummary || 'No items'}</p>
                         </div>
 
@@ -525,6 +524,10 @@ export const AdminPanel = () => {
                             <h4 className="mb-2 font-semibold text-gray-800">Order Details</h4>
                             <div className="space-y-2 text-sm text-gray-700">
                               <p><span className="font-semibold">Order ID:</span> {order.orderId}</p>
+                              <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
+                              <p><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
+                              <p><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p>
+                              <p><span className="font-semibold">Total:</span> ₱{Number(order.totalAmount || 0).toFixed(2)}</p>
                               <p><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
                             </div>
 
@@ -555,7 +558,7 @@ export const AdminPanel = () => {
               </div>
 
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1700px] text-sm">
+                <table className="w-full min-w-[1850px] text-sm">
                   <thead className="border-b bg-gray-100">
                     <tr>
                       <th className="px-4 py-3 text-left">Date Ordered</th>
@@ -564,6 +567,8 @@ export const AdminPanel = () => {
                       <th className="px-4 py-3 text-left">Delivery Address</th>
                       <th className="px-4 py-3 text-left">Payment</th>
                       <th className="px-4 py-3 text-left">Payment Status</th>
+                      <th className="px-4 py-3 text-left">Promo Code</th>
+                      <th className="px-4 py-3 text-right">Discount</th>
                       <th className="px-4 py-3 text-left">Items</th>
                       <th className="px-4 py-3 text-center">Item Count</th>
                       <th className="px-4 py-3 text-right">Total Amount</th>
@@ -573,10 +578,12 @@ export const AdminPanel = () => {
                   </thead>
                   <tbody>
                     {filteredOrders.length === 0 ? (
-                      <tr><td colSpan="11" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
+                      <tr><td colSpan="13" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
                     ) : (
                       filteredOrders.map((order) => {
                         const isExpanded = expandedOrderId === order.orderId;
+                        const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+
                         return (
                           <React.Fragment key={order.orderId}>
                             <tr className="border-b align-top hover:bg-gray-50">
@@ -594,6 +601,8 @@ export const AdminPanel = () => {
                                   </select>
                                 </div>
                               </td>
+                              <td className="px-4 py-3">{order.promoCode || 'None'}</td>
+                              <td className="px-4 py-3 text-right">-₱{Number(order.discountAmount || 0).toFixed(2)}</td>
                               <td className="px-4 py-3">{order.itemsSummary || 'No items'}</td>
                               <td className="px-4 py-3 text-center">{order.itemCount}</td>
                               <td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount).toFixed(2)}</td>
@@ -619,7 +628,7 @@ export const AdminPanel = () => {
                             </tr>
                             {isExpanded && (
                               <tr className="border-b bg-gray-50">
-                                <td colSpan="11" className="px-6 py-4">
+                                <td colSpan="13" className="px-6 py-4">
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
                                       <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
@@ -630,6 +639,10 @@ export const AdminPanel = () => {
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Status:</span> {order.paymentStatus}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Total:</span> ₱{Number(order.totalAmount || 0).toFixed(2)}</p>
                                       <p className="text-sm text-gray-700"><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
                                     </div>
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
