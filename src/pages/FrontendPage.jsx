@@ -304,18 +304,7 @@ function FrontendPage() {
           </div>
         )}
 
-        <section className="mb-6 flex flex-col items-center justify-center gap-3 text-center">
-          <div>
-            <p className="mb-2 text-sm font-semibold uppercase tracking-[0.25em] text-orange-500 sm:text-base">
-              Our Menu
-            </p>
-            <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-              Choose your favorites
-            </h2>
-          </div>
-        </section>
-
-        {loading && <p className="text-gray-600">Loading menu...</p>}
+          {loading && <p className="text-gray-600">Loading menu...</p>}
 
         {error && (
           <div className="mb-4 rounded-xl border border-red-300 bg-red-100 p-4 text-red-700">
