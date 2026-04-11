@@ -30,13 +30,7 @@ function FrontendPage() {
     [cartItems]
   );
 
-  const discountAmount = useMemo(() => {
-    const normalizedPromo = promoCode.trim().toUpperCase();
-
-    if (!normalizedPromo || subtotal <= 0) return 0;
-
-    return 0;
-  }, [promoCode, subtotal]);
+  const [discountAmount, setDiscountAmount] = useState(0);
 
   const finalTotal = useMemo(
     () => Math.max(0, Number(subtotal) - Number(discountAmount || 0)),
@@ -71,38 +65,6 @@ function FrontendPage() {
     );
   };
 
-  const validatePromoCode = async () => {
-    const normalizedPromo = promoCode.trim().toUpperCase();
-
-    if (!normalizedPromo) {
-      return { valid: true, code: null, discountAmount: 0 };
-    }
-
-    const { data, error } = await supabase.rpc('validate_promo_code', {
-      promo_code_input: normalizedPromo,
-      subtotal_input: subtotal,
-    });
-
-    if (error) {
-      return { valid: false, message: 'Unable to validate promo code right now.' };
-    }
-
-    const result = Array.isArray(data) ? data[0] : data;
-
-    if (!result?.is_valid) {
-      return {
-        valid: false,
-        message: result?.message || 'Promo code is invalid.',
-      };
-    }
-
-    return {
-      valid: true,
-      code: normalizedPromo,
-      discountAmount: Number(result.discount_amount || 0),
-    };
-  };
-
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0 || isSubmitting) return;
 
@@ -131,16 +93,46 @@ function FrontendPage() {
 
     setIsSubmitting(true);
 
-    const promoResult = await validatePromoCode();
+    const normalizedPromo = promoCode.trim().toUpperCase();
 
-    if (!promoResult.valid) {
-      setOrderError(promoResult.message);
-      setIsSubmitting(false);
-      return;
+    if (normalizedPromo) {
+      const { data: promoResult, error: promoError } = await supabase.rpc(
+        'validate_promo_code',
+        {
+          input_code: normalizedPromo,
+          order_subtotal: subtotal,
+        }
+      );
+
+      if (promoError) {
+        setOrderError(`Promo code validation failed: ${promoError.message}`);
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (!promoResult?.valid) {
+        setOrderError(promoResult?.message || 'Promo code is invalid.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      setDiscountAmount(Number(promoResult.discount_amount || 0));
+    } else {
+      setDiscountAmount(0);
     }
 
-    const appliedDiscountAmount = Number(promoResult.discountAmount || 0);
-    const finalOrderTotal = Math.max(0, subtotal - appliedDiscountAmount);
+    const appliedDiscount = normalizedPromo
+      ? Number(
+          (
+            await supabase.rpc('validate_promo_code', {
+              input_code: normalizedPromo,
+              order_subtotal: subtotal,
+            })
+          ).data?.discount_amount || 0
+        )
+      : 0;
+
+    const totalAfterDiscount = Math.max(0, subtotal - appliedDiscount);
 
     const { data: orderData, error: orderErrorResponse } = await supabase
       .from('orders')
@@ -151,9 +143,9 @@ function FrontendPage() {
           delivery_address: deliveryAddress.trim(),
           special_instructions: specialInstructions.trim(),
           payment_method: paymentMethod,
-          promo_code: promoResult.code,
-          discount_amount: appliedDiscountAmount,
-          total_amount: finalOrderTotal,
+          promo_code: normalizedPromo || null,
+          discount_amount: appliedDiscount,
+          total_amount: totalAfterDiscount,
           status: 'pending',
         },
       ])
@@ -192,10 +184,10 @@ function FrontendPage() {
       address: deliveryAddress.trim(),
       specialInstructions: specialInstructions.trim(),
       paymentMethod,
-      promoCode: promoResult.code || 'None',
-      discountAmount: appliedDiscountAmount,
+      promoCode: normalizedPromo || 'None',
+      discountAmount: appliedDiscount,
       subtotal,
-      total: finalOrderTotal,
+      total: totalAfterDiscount,
       itemCount: cartItems.reduce((sum, item) => sum + item.quantity, 0),
       items: cartItems.map((item) => ({
         name: item.name,
@@ -212,6 +204,7 @@ function FrontendPage() {
     setSpecialInstructions('');
     setPaymentMethod('COD');
     setPromoCode('');
+    setDiscountAmount(0);
     setIsSubmitting(false);
   };
 
@@ -222,27 +215,35 @@ function FrontendPage() {
       <Navbar cartCount={cartCount} onCartClick={() => setIsCartOpen(true)} />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <section
-          className="relative mb-8 overflow-hidden rounded-[2rem] shadow-lg"
-          style={{
-            backgroundImage:
-              "url('https://ieqpalamjvxxwxjupwnv.supabase.co/storage/v1/object/public/food-images/header.jpg')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/35 to-black/10" />
-          <div className="relative z-10 px-6 py-10 sm:px-10 sm:py-14 lg:min-h-[340px] lg:px-12 lg:py-16">
+        <section className="mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-500 to-amber-400 px-6 py-8 text-white shadow-lg sm:px-10 sm:py-12">
+          <div className="mx-auto max-w-3xl text-center">
             <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-orange-100">
               Food delivered to your door
             </p>
-            <h1 className="max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-5xl">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
               Fresh comfort food for every craving.
             </h1>
-            <p className="mt-4 max-w-xl text-sm text-orange-50 sm:text-base">
+            <p className="mt-4 text-sm text-orange-50 sm:text-base">
               Choose from our best-selling dishes, place your order in minutes,
               and enjoy fast local delivery.
             </p>
+
+            <a
+              href="https://www.facebook.com/foodiefyco/"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#1877F2] shadow-sm transition hover:bg-orange-50"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="h-5 w-5"
+              >
+                <path d="M13.5 22v-8h2.7l.4-3h-3.1V9.1c0-.9.3-1.6 1.6-1.6h1.7V4.8c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.1V11H8v3h2.4v8h3.1Z" />
+              </svg>
+              Visit our Facebook page
+            </a>
           </div>
         </section>
 
@@ -262,7 +263,9 @@ function FrontendPage() {
             <p className="mb-1">Payment Method: {orderConfirmation.paymentMethod}</p>
             <p className="mb-1">Promo Code: {orderConfirmation.promoCode}</p>
             <p className="mb-1">Items: {orderConfirmation.itemCount}</p>
-            <p className="mb-1">Special Instructions: {orderConfirmation.specialInstructions || 'None'}</p>
+            <p className="mb-1">
+              Special Instructions: {orderConfirmation.specialInstructions || 'None'}
+            </p>
 
             {orderConfirmation.items && (
               <div className="mb-3 mt-3">
@@ -278,7 +281,9 @@ function FrontendPage() {
             )}
 
             <p className="mb-1">Subtotal: ₱{orderConfirmation.subtotal.toFixed(2)}</p>
-            <p className="mb-1 text-green-700">Discount: -₱{orderConfirmation.discountAmount.toFixed(2)}</p>
+            <p className="mb-1 text-green-700">
+              Discount: -₱{orderConfirmation.discountAmount.toFixed(2)}
+            </p>
             <p className="mb-3 font-semibold">Total: ₱{orderConfirmation.total.toFixed(2)}</p>
             <button
               onClick={() => setOrderConfirmation(null)}
@@ -289,18 +294,15 @@ function FrontendPage() {
           </div>
         )}
 
-        <section className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <section className="mb-6 flex flex-col items-center justify-center gap-3 text-center">
           <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-orange-500">
+            <p className="mb-2 text-sm font-semibold uppercase tracking-[0.25em] text-orange-500 sm:text-base">
               Our Menu
             </p>
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+            <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
               Choose your favorites
             </h2>
           </div>
-          {!loading && !error && (
-            <p className="text-sm text-gray-500">{menuItems.length} available dishes today</p>
-          )}
         </section>
 
         {loading && <p className="text-gray-600">Loading menu...</p>}
