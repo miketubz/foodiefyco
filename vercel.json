@@ -1,9 +1,20 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
+  "headers": [
+    {
+      "source": "/pix/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
-      "source": "/((?!assets/|favicon.ico|robots.txt|manifest.json).*)",
+      "source": "/((?!assets/|pix/|favicon.ico|robots.txt|manifest.json).*)",
       "destination": "/index.html"
     }
   ]
