@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
 
@@ -18,6 +17,8 @@ export const useOrdersExport = () => {
         total_amount,
         status,
         payment_status,
+        promo_code,
+        discount_amount,
         customer_name,
         phone_number,
         delivery_address,
@@ -60,12 +61,15 @@ export const useOrdersExport = () => {
 
         return {
           orderId: order.id,
+          createdAt: order.created_at,
           customerName: order.customer_name || 'N/A',
           phoneNumber: order.phone_number || 'N/A',
           deliveryAddress: order.delivery_address || 'N/A',
           specialInstructions: order.special_instructions || '',
           paymentMethod: order.payment_method || 'COD',
           paymentStatus: order.payment_status || 'unpaid',
+          promoCode: order.promo_code || '',
+          discountAmount: Number(order.discount_amount || 0),
           orderDate: new Date(order.created_at).toLocaleString(),
           totalAmount: Number(order.total_amount || 0),
           itemCount: orderItems.reduce((sum, item) => sum + item.quantity, 0),
