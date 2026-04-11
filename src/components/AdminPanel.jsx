@@ -7,7 +7,6 @@ import { supabase } from '../lib/supabaseClient';
 export const AdminPanel = () => {
   const navigate = useNavigate();
   const { orders, loading, error, fetchOrdersForExport } = useOrdersExport();
-
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -155,8 +154,6 @@ export const AdminPanel = () => {
               <p><strong>Address:</strong> ${order.deliveryAddress}</p>
               <p><strong>Payment Method:</strong> ${order.paymentMethod || 'Not specified'}</p>
               <p><strong>Payment Status:</strong> ${order.paymentStatus || 'unpaid'}</p>
-              <p><strong>Promo Code:</strong> ${order.promoCode || 'None'}</p>
-              <p><strong>Discount:</strong> ₱${Number(order.discountAmount || 0).toFixed(2)}</p>
               <p><strong>Status:</strong> ${order.status}</p>
               <p><strong>Special Instructions:</strong> ${order.specialInstructions || 'None'}</p>
             </div>
@@ -222,8 +219,6 @@ export const AdminPanel = () => {
         order.deliveryAddress,
         order.paymentMethod,
         order.paymentStatus,
-        order.promoCode,
-        order.discountAmount,
         order.itemsSummary,
         order.specialInstructions,
         order.status,
@@ -236,37 +231,30 @@ export const AdminPanel = () => {
     });
   }, [orders, searchTerm]);
 
+  const summary = useMemo(() => {
+    const totalSales = filteredOrders
+      .filter((order) => order.status !== 'cancelled')
+      .reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+
+    const paidOrders = filteredOrders.filter((order) => order.paymentStatus === 'paid').length;
+    const unpaidOrders = filteredOrders.filter((order) => order.paymentStatus !== 'paid').length;
+    const pendingOrders = filteredOrders.filter((order) => order.status === 'pending').length;
+    const completedOrders = filteredOrders.filter((order) => order.status === 'completed').length;
+
+    return {
+      orderCount: filteredOrders.length,
+      totalSales,
+      paidOrders,
+      unpaidOrders,
+      pendingOrders,
+      completedOrders,
+    };
+  }, [filteredOrders]);
+
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
     [orders]
   );
-
-  const summary = useMemo(() => {
-    const now = new Date();
-    const isSameDay = (isoString) => {
-      if (!isoString) return false;
-      const date = new Date(isoString);
-      return (
-        date.getFullYear() === now.getFullYear() &&
-        date.getMonth() === now.getMonth() &&
-        date.getDate() === now.getDate()
-      );
-    };
-
-    const todayOrders = filteredOrders.filter((order) => isSameDay(order.createdAt));
-    const nonCancelledToday = todayOrders.filter((order) => order.status !== 'cancelled');
-
-    return {
-      ordersToday: todayOrders.length,
-      totalSalesToday: nonCancelledToday.reduce(
-        (sum, order) => sum + Number(order.totalAmount || 0),
-        0
-      ),
-      paidOrders: filteredOrders.filter((order) => order.paymentStatus === 'paid').length,
-      unpaidOrders: filteredOrders.filter((order) => order.paymentStatus !== 'paid').length,
-      pendingOrders: filteredOrders.filter((order) => order.status === 'pending').length,
-    };
-  }, [filteredOrders]);
 
   const getStatusClasses = (status) => {
     if (status === 'completed') return 'bg-green-100 text-green-800';
@@ -288,12 +276,6 @@ export const AdminPanel = () => {
           <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/"
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Storefront
-            </Link>
             <Link
               to="/admin"
               className="rounded-md bg-gray-900 px-4 py-2 text-white"
@@ -393,12 +375,12 @@ export const AdminPanel = () => {
           <>
             <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm font-medium text-gray-500">Orders Today</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900">{summary.ordersToday}</p>
+                <p className="text-sm font-medium text-gray-500">Orders in View</p>
+                <p className="mt-2 text-3xl font-bold text-gray-900">{summary.orderCount}</p>
               </div>
               <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm font-medium text-gray-500">Total Sales Today</p>
-                <p className="mt-2 text-3xl font-bold text-green-600">₱{summary.totalSalesToday.toFixed(2)}</p>
+                <p className="text-sm font-medium text-gray-500">Total Sales</p>
+                <p className="mt-2 text-3xl font-bold text-green-600">₱{summary.totalSales.toFixed(2)}</p>
               </div>
               <div className="rounded-xl bg-white p-5 shadow">
                 <p className="text-sm font-medium text-gray-500">Paid Orders</p>
@@ -450,7 +432,7 @@ export const AdminPanel = () => {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by customer, phone, address, order ID, item, payment, promo..."
+                  placeholder="Search by customer, phone, address, order ID, item, payment..."
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -481,8 +463,6 @@ export const AdminPanel = () => {
                         <div className="mb-3 grid grid-cols-1 gap-2 text-sm text-gray-700">
                           <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                           <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
-                          <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
-                          <p><span className="font-semibold">Discount:</span> ₱{Number(order.discountAmount || 0).toFixed(2)}</p>
                           <p><span className="font-semibold">Items:</span> {order.itemsSummary || 'No items'}</p>
                         </div>
 
@@ -584,7 +564,7 @@ export const AdminPanel = () => {
               </div>
 
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1850px] text-sm">
+                <table className="w-full min-w-[1700px] text-sm">
                   <thead className="border-b bg-gray-100">
                     <tr>
                       <th className="px-4 py-3 text-left">Date Ordered</th>
@@ -593,8 +573,6 @@ export const AdminPanel = () => {
                       <th className="px-4 py-3 text-left">Delivery Address</th>
                       <th className="px-4 py-3 text-left">Payment</th>
                       <th className="px-4 py-3 text-left">Payment Status</th>
-                      <th className="px-4 py-3 text-left">Promo Code</th>
-                      <th className="px-4 py-3 text-right">Discount</th>
                       <th className="px-4 py-3 text-left">Items</th>
                       <th className="px-4 py-3 text-center">Item Count</th>
                       <th className="px-4 py-3 text-right">Total Amount</th>
@@ -605,7 +583,7 @@ export const AdminPanel = () => {
                   <tbody>
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan="13" className="px-4 py-6 text-center text-gray-500">
+                        <td colSpan="11" className="px-4 py-6 text-center text-gray-500">
                           No orders matched your search.
                         </td>
                       </tr>
@@ -644,8 +622,6 @@ export const AdminPanel = () => {
                                   </select>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">{order.promoCode || 'None'}</td>
-                              <td className="px-4 py-3 text-right">₱{Number(order.discountAmount || 0).toFixed(2)}</td>
                               <td className="px-4 py-3">{order.itemsSummary || 'No items'}</td>
                               <td className="px-4 py-3 text-center">{order.itemCount}</td>
                               <td className="px-4 py-3 text-right font-semibold">
@@ -703,7 +679,7 @@ export const AdminPanel = () => {
 
                             {isExpanded && (
                               <tr className="border-b bg-gray-50">
-                                <td colSpan="13" className="px-6 py-4">
+                                <td colSpan="11" className="px-6 py-4">
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
                                       <h3 className="mb-3 font-semibold text-gray-800">
@@ -736,13 +712,6 @@ export const AdminPanel = () => {
                                       <p className="mb-2 text-sm text-gray-700">
                                         <span className="font-semibold">Payment Status:</span>{' '}
                                         {order.paymentStatus}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Promo Code:</span>{' '}
-                                        {order.promoCode || 'None'}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Discount:</span> ₱{Number(order.discountAmount || 0).toFixed(2)}
                                       </p>
                                       <p className="text-sm text-gray-700">
                                         <span className="font-semibold">Special Instructions:</span>{' '}
@@ -797,4 +766,4 @@ export const AdminPanel = () => {
       </div>
     </div>
   );
-}
+};
