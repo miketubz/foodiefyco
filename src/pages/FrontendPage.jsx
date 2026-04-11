@@ -256,16 +256,6 @@ function FrontendPage() {
   </div>
 </section>
 
-<section className="mb-6 flex flex-col items-center justify-center gap-3 text-center">
-  <div>
-    <p className="mb-2 text-xl font-bold uppercase tracking-[0.35em] text-orange-500 sm:text-2xl">
-      Our Menu
-    </p>
-    <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-      Choose your favorites
-    </h2>
-  </div>
-</section>
 
         {orderError && (
           <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-700">
