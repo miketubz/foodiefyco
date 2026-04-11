@@ -302,7 +302,7 @@ function FrontendPage() {
     <p className="mb-2 text-lg font-bold uppercase tracking-[0.28em] text-orange-500 sm:text-xl">
       Our Menu
     </p>
-    <h2 className="mx-auto max-w-md text-3xl font-bold tracking-tight text-gray-900 sm:max-w-none sm:text-4xl">
+    <h2 className="mx-auto max-w-md text-2xl font-bold tracking-tight text-gray-900 sm:max-w-none sm:text-3xl">
       Choose your favorites
     </h2>
   </div>
