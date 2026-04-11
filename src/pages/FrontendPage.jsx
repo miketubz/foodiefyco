@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Navbar from '../components/Navbar';
 import MenuCard from '../components/MenuCard';
 import Cart from '../components/Cart';
@@ -21,6 +21,10 @@ function FrontendPage() {
   const [orderError, setOrderError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
+
+  const [promoMessage, setPromoMessage] = useState('');
+  const [promoError, setPromoError] = useState('');
+  const [isApplyingPromo, setIsApplyingPromo] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -53,11 +57,7 @@ function FrontendPage() {
       const matchesCategory =
         selectedCategory === 'all' || (item.category || '') === selectedCategory;
 
-      const searchableText = [
-        item.name,
-        item.category,
-        item.description,
-      ]
+      const searchableText = [item.name, item.category, item.description]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -67,6 +67,12 @@ function FrontendPage() {
       return matchesCategory && matchesSearch;
     });
   }, [menuItems, searchTerm, selectedCategory]);
+
+  useEffect(() => {
+    setDiscountAmount(0);
+    setPromoMessage('');
+    setPromoError('');
+  }, [promoCode, subtotal]);
 
   const handleAddToCart = (item) => {
     setCartItems((prev) => {
@@ -96,9 +102,27 @@ function FrontendPage() {
     );
   };
 
+  const normalizePromoResult = (data) => {
+    const raw = Array.isArray(data) ? data[0] : data;
+
+    if (!raw) {
+      return {
+        valid: false,
+        discount_amount: 0,
+        message: 'Promo code is invalid.',
+      };
+    }
+
+    return {
+      valid: raw.valid ?? raw.is_valid ?? false,
+      discount_amount: Number(raw.discount_amount ?? raw.discount ?? 0),
+      message: raw.message ?? '',
+    };
+  };
+
   const validatePromoCode = async (normalizedPromo) => {
     if (!normalizedPromo) {
-      return { valid: true, discount_amount: 0 };
+      return { valid: true, discount_amount: 0, message: '' };
     }
 
     const { data, error } = await supabase.rpc('validate_promo_code', {
@@ -110,7 +134,46 @@ function FrontendPage() {
       throw new Error(error.message);
     }
 
-    return data;
+    return normalizePromoResult(data);
+  };
+
+  const handleApplyPromo = async () => {
+    const normalizedPromo = promoCode.trim().toUpperCase();
+
+    setPromoMessage('');
+    setPromoError('');
+    setOrderError('');
+
+    if (!normalizedPromo) {
+      setDiscountAmount(0);
+      setPromoError('Enter a promo code first.');
+      return;
+    }
+
+    setIsApplyingPromo(true);
+
+    try {
+      const promoResult = await validatePromoCode(normalizedPromo);
+
+      if (!promoResult.valid) {
+        setDiscountAmount(0);
+        setPromoError(promoResult.message || 'Promo code is invalid.');
+        setIsApplyingPromo(false);
+        return;
+      }
+
+      setDiscountAmount(Number(promoResult.discount_amount || 0));
+      setPromoMessage(
+        `Promo code applied. Discount: ₱${Number(
+          promoResult.discount_amount || 0
+        ).toFixed(2)}`
+      );
+    } catch (err) {
+      setDiscountAmount(0);
+      setPromoError(`Promo code validation failed: ${err.message}`);
+    } finally {
+      setIsApplyingPromo(false);
+    }
   };
 
   const handlePlaceOrder = async () => {
@@ -227,6 +290,8 @@ function FrontendPage() {
       setPaymentMethod('COD');
       setPromoCode('');
       setDiscountAmount(0);
+      setPromoMessage('');
+      setPromoError('');
       setIsSubmitting(false);
     } catch (err) {
       setOrderError(`Promo code validation failed: ${err.message}`);
@@ -424,6 +489,7 @@ function FrontendPage() {
           onClose={() => setIsCartOpen(false)}
           onRemove={handleRemoveFromCart}
           onPlaceOrder={handlePlaceOrder}
+          onApplyPromo={handleApplyPromo}
           customerName={customerName}
           setCustomerName={setCustomerName}
           phoneNumber={phoneNumber}
@@ -439,6 +505,9 @@ function FrontendPage() {
           discountAmount={discountAmount}
           subtotal={subtotal}
           isSubmitting={isSubmitting}
+          isApplyingPromo={isApplyingPromo}
+          promoMessage={promoMessage}
+          promoError={promoError}
         />
       )}
     </div>
