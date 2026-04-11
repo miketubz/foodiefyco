@@ -21,6 +21,13 @@ export const AdminPanel = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [todaySummary, setTodaySummary] = useState({ orders: 0, sales: 0 });
 
+  const formatDateInput = (date) => {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const getTodayBounds = () => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -30,6 +37,7 @@ export const AdminPanel = () => {
 
   const fetchTodaySummary = async () => {
     const { start, end } = getTodayBounds();
+
     const { data, error: summaryError } = await supabase
       .from('orders')
       .select('id, total_amount, status')
@@ -50,15 +58,66 @@ export const AdminPanel = () => {
     fetchTodaySummary();
   }, []);
 
-  const handleFetchOrders = async () => {
+  const runFetch = async (nextFilters) => {
     setActionError('');
     setSuccessMessage('');
+
     await fetchOrdersForExport({
-      startDate: filters.startDate || undefined,
-      endDate: filters.endDate || undefined,
-      status: filters.status === 'all' ? undefined : filters.status,
+      startDate: nextFilters.startDate || undefined,
+      endDate: nextFilters.endDate || undefined,
+      status: nextFilters.status === 'all' ? undefined : nextFilters.status,
     });
+
     await fetchTodaySummary();
+  };
+
+  const handleFetchOrders = async () => {
+    await runFetch(filters);
+  };
+
+  const handleQuickRange = async (type) => {
+    const now = new Date();
+    let startDate = '';
+    let endDate = '';
+
+    if (type === 'today') {
+      startDate = formatDateInput(now);
+      endDate = formatDateInput(now);
+    }
+
+    if (type === 'yesterday') {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      startDate = formatDateInput(yesterday);
+      endDate = formatDateInput(yesterday);
+    }
+
+    if (type === 'last7') {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 6);
+      startDate = formatDateInput(start);
+      endDate = formatDateInput(now);
+    }
+
+    if (type === 'thisMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate = formatDateInput(start);
+      endDate = formatDateInput(now);
+    }
+
+    if (type === 'all') {
+      startDate = '';
+      endDate = '';
+    }
+
+    const nextFilters = {
+      ...filters,
+      startDate,
+      endDate,
+    };
+
+    setFilters(nextFilters);
+    await runFetch(nextFilters);
   };
 
   const handleExportCSV = () => {
@@ -66,6 +125,7 @@ export const AdminPanel = () => {
       alert('No orders to export');
       return;
     }
+
     const csvContent = generateOrdersCSV(orders);
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(csvContent, `orders_${timestamp}.csv`);
@@ -75,12 +135,18 @@ export const AdminPanel = () => {
     setSavingOrderId(orderId);
     setActionError('');
     setSuccessMessage('');
-    const { error: updateError } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId);
+
     if (updateError) {
       setActionError(updateError.message);
       setSavingOrderId(null);
       return;
     }
+
     await handleFetchOrders();
     setSavingOrderId(null);
     setSuccessMessage(`Order status updated to ${newStatus}.`);
@@ -90,12 +156,18 @@ export const AdminPanel = () => {
     setSavingOrderId(orderId);
     setActionError('');
     setSuccessMessage('');
-    const { error: updateError } = await supabase.from('orders').update({ payment_status: newPaymentStatus }).eq('id', orderId);
+
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ payment_status: newPaymentStatus })
+      .eq('id', orderId);
+
     if (updateError) {
       setActionError(updateError.message);
       setSavingOrderId(null);
       return;
     }
+
     await handleFetchOrders();
     setSavingOrderId(null);
     setSuccessMessage(`Payment status updated to ${newPaymentStatus}.`);
@@ -103,10 +175,12 @@ export const AdminPanel = () => {
 
   const handleClearCompletedOrders = async () => {
     const completedOrders = orders.filter((order) => order.status === 'completed');
+
     if (completedOrders.length === 0) {
       alert('No completed orders to clear.');
       return;
     }
+
     const confirmed = window.confirm('Clear all completed orders?');
     if (!confirmed) return;
 
@@ -115,6 +189,7 @@ export const AdminPanel = () => {
     setSuccessMessage('');
 
     const ids = completedOrders.map((order) => order.orderId);
+
     const { error: deleteError } = await supabase.from('orders').delete().in('id', ids);
 
     if (deleteError) {
@@ -291,6 +366,14 @@ export const AdminPanel = () => {
         <div className="mb-6 rounded-lg bg-white p-6 shadow">
           <h2 className="mb-4 text-xl font-semibold text-gray-800">Fetch Orders</h2>
 
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button onClick={() => handleQuickRange('today')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Today</button>
+            <button onClick={() => handleQuickRange('yesterday')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Yesterday</button>
+            <button onClick={() => handleQuickRange('last7')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Last 7 Days</button>
+            <button onClick={() => handleQuickRange('thisMonth')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">This Month</button>
+            <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200">All Dates</button>
+          </div>
+
           <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
@@ -366,7 +449,6 @@ export const AdminPanel = () => {
                 ) : (
                   filteredOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.orderId;
-
                     return (
                       <div key={order.orderId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                         <div className="mb-3 flex items-start justify-between gap-3">
