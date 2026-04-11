@@ -12,6 +12,7 @@ export const AdminPanel = () => {
     startDate: '',
     endDate: '',
     status: 'all',
+    paymentStatus: 'all',
   });
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -279,9 +280,15 @@ export const AdminPanel = () => {
 
   const filteredOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return orders;
 
     return orders.filter((order) => {
+      const matchesPaymentStatus =
+        filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
+
+      if (!matchesPaymentStatus) return false;
+
+      if (!term) return true;
+
       const orderItemText = (order.orderItems || [])
         .map((item) => `${item.name || ''} ${item.quantity || ''}`)
         .join(' ')
@@ -303,7 +310,7 @@ export const AdminPanel = () => {
 
       return haystack.includes(term);
     });
-  }, [orders, searchTerm]);
+  }, [orders, searchTerm, filters.paymentStatus]);
 
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
@@ -331,11 +338,16 @@ export const AdminPanel = () => {
   }, [filteredOrders]);
 
   const rangeLabel = useMemo(() => {
-    if (filters.startDate && filters.endDate) return `${filters.startDate} to ${filters.endDate}`;
-    if (filters.startDate) return `From ${filters.startDate}`;
-    if (filters.endDate) return `Until ${filters.endDate}`;
-    return 'Current View';
-  }, [filters.endDate, filters.startDate]);
+    const paymentPart =
+      filters.paymentStatus === 'all'
+        ? ''
+        : ` • ${filters.paymentStatus === 'paid' ? 'Paid Only' : 'Unpaid Only'}`;
+
+    if (filters.startDate && filters.endDate) return `${filters.startDate} to ${filters.endDate}${paymentPart}`;
+    if (filters.startDate) return `From ${filters.startDate}${paymentPart}`;
+    if (filters.endDate) return `Until ${filters.endDate}${paymentPart}`;
+    return `Current View${paymentPart}`;
+  }, [filters.endDate, filters.startDate, filters.paymentStatus]);
 
   const getStatusClasses = (status) => {
     if (status === 'completed') return 'bg-green-100 text-green-800';
@@ -374,7 +386,7 @@ export const AdminPanel = () => {
             <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200">All Dates</button>
           </div>
 
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-5">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
               <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -390,6 +402,14 @@ export const AdminPanel = () => {
                 <option value="pending">Pending</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Payment Status</label>
+              <select value={filters.paymentStatus} onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="all">All</option>
+                <option value="paid">Paid</option>
+                <option value="unpaid">Unpaid</option>
               </select>
             </div>
             <div className="flex items-end">
