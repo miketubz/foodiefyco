@@ -297,16 +297,16 @@ function FrontendPage() {
           </div>
         )}
 
-        <section className="mb-6 flex flex-col items-center justify-center gap-3 text-center">
-          <div>
-            <p className="mb-2 text-xl font-bold uppercase tracking-[0.35em] text-orange-500 sm:text-2xl">
-              Our Menu
-            </p>
-            <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-              Choose your favorites
-            </h2>
-          </div>
-        </section>
+      <section className="mb-6 flex justify-center px-4 text-center">
+  <div className="w-full max-w-2xl">
+    <p className="mb-2 text-lg font-bold uppercase tracking-[0.28em] text-orange-500 sm:text-xl">
+      Our Menu
+    </p>
+    <h2 className="mx-auto max-w-md text-3xl font-bold tracking-tight text-gray-900 sm:max-w-none sm:text-4xl">
+      Choose your favorites
+    </h2>
+  </div>
+</section>
 
         {loading && <p className="text-gray-600">Loading menu...</p>}
 
