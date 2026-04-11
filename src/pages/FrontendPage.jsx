@@ -215,37 +215,57 @@ function FrontendPage() {
       <Navbar cartCount={cartCount} onCartClick={() => setIsCartOpen(true)} />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <section className="mb-8 overflow-hidden rounded-[2rem] bg-gradient-to-r from-orange-500 to-amber-400 px-6 py-8 text-white shadow-lg sm:px-10 sm:py-12">
-          <div className="mx-auto max-w-3xl text-center">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-orange-100">
-              Food delivered to your door
-            </p>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
-              Fresh comfort food for every craving.
-            </h1>
-            <p className="mt-4 text-sm text-orange-50 sm:text-base">
-              Choose from our best-selling dishes, place your order in minutes,
-              and enjoy fast local delivery.
-            </p>
+        <section
+  className="relative mb-8 overflow-hidden rounded-[2rem] px-6 py-10 text-white shadow-lg sm:px-10 sm:py-14"
+  style={{
+    backgroundImage: "url('/pix/header.jpg')",
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  }}
+>
+  <div className="absolute inset-0 bg-black/45" />
 
-            <a
-              href="https://www.facebook.com/foodiefyco/"
-              target="_blank"
-              rel="noreferrer"
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#1877F2] shadow-sm transition hover:bg-orange-50"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className="h-5 w-5"
-              >
-                <path d="M13.5 22v-8h2.7l.4-3h-3.1V9.1c0-.9.3-1.6 1.6-1.6h1.7V4.8c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.1V11H8v3h2.4v8h3.1Z" />
-              </svg>
-              Visit our Facebook page
-            </a>
-          </div>
-        </section>
+  <div className="relative z-10 mx-auto max-w-3xl text-center">
+    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.25em] text-orange-100">
+      Food delivered to your door
+    </p>
+    <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">
+      Fresh comfort food for every craving.
+    </h1>
+    <p className="mt-4 text-sm text-orange-50 sm:text-base">
+      Choose from our best-selling dishes, place your order in minutes,
+      and enjoy fast local delivery.
+    </p>
+
+    <a
+      href="https://www.facebook.com/foodiefyco/"
+      target="_blank"
+      rel="noreferrer"
+      className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#1877F2] shadow-sm transition hover:bg-orange-50"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className="h-5 w-5"
+      >
+        <path d="M13.5 22v-8h2.7l.4-3h-3.1V9.1c0-.9.3-1.6 1.6-1.6h1.7V4.8c-.3 0-1.3-.1-2.4-.1-2.4 0-4 1.4-4 4.1V11H8v3h2.4v8h3.1Z" />
+      </svg>
+      Visit our Facebook page and win a Promo
+    </a>
+  </div>
+</section>
+
+<section className="mb-6 flex flex-col items-center justify-center gap-3 text-center">
+  <div>
+    <p className="mb-2 text-xl font-bold uppercase tracking-[0.35em] text-orange-500 sm:text-2xl">
+      Our Menu
+    </p>
+    <h2 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+      Choose your favorites
+    </h2>
+  </div>
+</section>
 
         {orderError && (
           <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 p-4 text-red-700">
