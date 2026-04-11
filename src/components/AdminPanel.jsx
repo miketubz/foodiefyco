@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useOrdersExport } from '../hooks/useOrdersExport';
 import { generateOrdersCSV, downloadCSV } from '../utils/csvExport';
@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabaseClient';
 export const AdminPanel = () => {
   const navigate = useNavigate();
   const { orders, loading, error, fetchOrdersForExport } = useOrdersExport();
+
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -18,16 +19,46 @@ export const AdminPanel = () => {
   const [actionError, setActionError] = useState('');
   const [clearingCompleted, setClearingCompleted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [todaySummary, setTodaySummary] = useState({ orders: 0, sales: 0 });
+
+  const getTodayBounds = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return { start: start.toISOString(), end: end.toISOString() };
+  };
+
+  const fetchTodaySummary = async () => {
+    const { start, end } = getTodayBounds();
+    const { data, error: summaryError } = await supabase
+      .from('orders')
+      .select('id, total_amount, status')
+      .gte('created_at', start)
+      .lte('created_at', end);
+
+    if (summaryError) return;
+
+    const todayOrders = data || [];
+    const todaySales = todayOrders
+      .filter((order) => order.status !== 'cancelled')
+      .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
+
+    setTodaySummary({ orders: todayOrders.length, sales: todaySales });
+  };
+
+  useEffect(() => {
+    fetchTodaySummary();
+  }, []);
 
   const handleFetchOrders = async () => {
     setActionError('');
     setSuccessMessage('');
-
     await fetchOrdersForExport({
       startDate: filters.startDate || undefined,
       endDate: filters.endDate || undefined,
       status: filters.status === 'all' ? undefined : filters.status,
     });
+    await fetchTodaySummary();
   };
 
   const handleExportCSV = () => {
@@ -35,7 +66,6 @@ export const AdminPanel = () => {
       alert('No orders to export');
       return;
     }
-
     const csvContent = generateOrdersCSV(orders);
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(csvContent, `orders_${timestamp}.csv`);
@@ -45,18 +75,12 @@ export const AdminPanel = () => {
     setSavingOrderId(orderId);
     setActionError('');
     setSuccessMessage('');
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: newStatus })
-      .eq('id', orderId);
-
-    if (error) {
-      setActionError(error.message);
+    const { error: updateError } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+    if (updateError) {
+      setActionError(updateError.message);
       setSavingOrderId(null);
       return;
     }
-
     await handleFetchOrders();
     setSavingOrderId(null);
     setSuccessMessage(`Order status updated to ${newStatus}.`);
@@ -66,18 +90,12 @@ export const AdminPanel = () => {
     setSavingOrderId(orderId);
     setActionError('');
     setSuccessMessage('');
-
-    const { error } = await supabase
-      .from('orders')
-      .update({ payment_status: newPaymentStatus })
-      .eq('id', orderId);
-
-    if (error) {
-      setActionError(error.message);
+    const { error: updateError } = await supabase.from('orders').update({ payment_status: newPaymentStatus }).eq('id', orderId);
+    if (updateError) {
+      setActionError(updateError.message);
       setSavingOrderId(null);
       return;
     }
-
     await handleFetchOrders();
     setSavingOrderId(null);
     setSuccessMessage(`Payment status updated to ${newPaymentStatus}.`);
@@ -85,12 +103,10 @@ export const AdminPanel = () => {
 
   const handleClearCompletedOrders = async () => {
     const completedOrders = orders.filter((order) => order.status === 'completed');
-
     if (completedOrders.length === 0) {
       alert('No completed orders to clear.');
       return;
     }
-
     const confirmed = window.confirm('Clear all completed orders?');
     if (!confirmed) return;
 
@@ -99,11 +115,10 @@ export const AdminPanel = () => {
     setSuccessMessage('');
 
     const ids = completedOrders.map((order) => order.orderId);
+    const { error: deleteError } = await supabase.from('orders').delete().in('id', ids);
 
-    const { error } = await supabase.from('orders').delete().in('id', ids);
-
-    if (error) {
-      setActionError(error.message);
+    if (deleteError) {
+      setActionError(deleteError.message);
       setClearingCompleted(false);
       return;
     }
@@ -116,7 +131,6 @@ export const AdminPanel = () => {
 
   const handlePrintReceipt = (order) => {
     const receiptWindow = window.open('', '_blank', 'width=800,height=900');
-
     if (!receiptWindow) {
       alert('Please allow popups to print the receipt.');
       return;
@@ -145,7 +159,6 @@ export const AdminPanel = () => {
           <div style="max-width: 700px; margin: 0 auto;">
             <h1 style="margin-bottom: 8px;">FoodiefyCo Receipt</h1>
             <p style="margin: 0 0 20px; color: #4b5563;">Order summary</p>
-
             <div style="margin-bottom: 20px;">
               <p><strong>Order ID:</strong> ${order.orderId}</p>
               <p><strong>Date Ordered:</strong> ${order.orderDate}</p>
@@ -157,7 +170,6 @@ export const AdminPanel = () => {
               <p><strong>Status:</strong> ${order.status}</p>
               <p><strong>Special Instructions:</strong> ${order.specialInstructions || 'None'}</p>
             </div>
-
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
               <thead>
                 <tr style="background: #f3f4f6;">
@@ -170,39 +182,28 @@ export const AdminPanel = () => {
                 ${itemRows || '<tr><td colspan="3" style="padding: 10px;">No items found.</td></tr>'}
               </tbody>
             </table>
-
             <p style="font-size: 18px; text-align: right;"><strong>Total: ₱${Number(order.totalAmount || 0).toFixed(2)}</strong></p>
           </div>
-          <script>
-            window.onload = function () {
-              window.print();
-            };
-          </script>
+          <script>window.onload = function () { window.print(); };</script>
         </body>
       </html>
     `);
-
     receiptWindow.document.close();
   };
 
-  const handlePdfReceipt = (order) => {
-    handlePrintReceipt(order);
-  };
+  const handlePdfReceipt = (order) => handlePrintReceipt(order);
 
   const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      setActionError(error.message);
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+      setActionError(signOutError.message);
       return;
     }
-
     navigate('/admin/login', { replace: true });
   };
 
   const filteredOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-
     if (!term) return orders;
 
     return orders.filter((order) => {
@@ -223,38 +224,43 @@ export const AdminPanel = () => {
         order.specialInstructions,
         order.status,
         orderItemText,
-      ]
-        .join(' ')
-        .toLowerCase();
+      ].join(' ').toLowerCase();
 
       return haystack.includes(term);
     });
   }, [orders, searchTerm]);
 
-  const summary = useMemo(() => {
-    const totalSales = filteredOrders
-      .filter((order) => order.status !== 'cancelled')
-      .reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-
-    const paidOrders = filteredOrders.filter((order) => order.paymentStatus === 'paid').length;
-    const unpaidOrders = filteredOrders.filter((order) => order.paymentStatus !== 'paid').length;
-    const pendingOrders = filteredOrders.filter((order) => order.status === 'pending').length;
-    const completedOrders = filteredOrders.filter((order) => order.status === 'completed').length;
-
-    return {
-      orderCount: filteredOrders.length,
-      totalSales,
-      paidOrders,
-      unpaidOrders,
-      pendingOrders,
-      completedOrders,
-    };
-  }, [filteredOrders]);
-
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
     [orders]
   );
+
+  const rangeSummary = useMemo(() => {
+    const nonCancelledOrders = filteredOrders.filter((order) => order.status !== 'cancelled');
+    const totalSales = nonCancelledOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+
+    const byMethod = nonCancelledOrders.reduce((acc, order) => {
+      const method = order.paymentMethod || 'Unknown';
+      acc[method] = (acc[method] || 0) + Number(order.totalAmount || 0);
+      return acc;
+    }, {});
+
+    return {
+      orders: filteredOrders.length,
+      sales: totalSales,
+      cod: byMethod.COD || 0,
+      gcash: byMethod.GCASH || 0,
+      gotyme: byMethod.GOtyme || 0,
+      unionbank: byMethod.UnionBank || 0,
+    };
+  }, [filteredOrders]);
+
+  const rangeLabel = useMemo(() => {
+    if (filters.startDate && filters.endDate) return `${filters.startDate} to ${filters.endDate}`;
+    if (filters.startDate) return `From ${filters.startDate}`;
+    if (filters.endDate) return `Until ${filters.endDate}`;
+    return 'Current View';
+  }, [filters.endDate, filters.startDate]);
 
   const getStatusClasses = (status) => {
     if (status === 'completed') return 'bg-green-100 text-green-800';
@@ -276,24 +282,9 @@ export const AdminPanel = () => {
           <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/admin"
-              className="rounded-md bg-gray-900 px-4 py-2 text-white"
-            >
-              Orders
-            </Link>
-            <Link
-              to="/admin/menu"
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Menu
-            </Link>
-            <button
-              onClick={handleSignOut}
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Sign Out
-            </button>
+            <Link to="/admin" className="rounded-md bg-gray-900 px-4 py-2 text-white">Orders</Link>
+            <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Menu</Link>
+            <button onClick={handleSignOut} className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Sign Out</button>
           </div>
         </div>
 
@@ -302,146 +293,76 @@ export const AdminPanel = () => {
 
           <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Start Date
-              </label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) =>
-                  setFilters({ ...filters, startDate: e.target.value })
-                }
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
+              <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) =>
-                  setFilters({ ...filters, endDate: e.target.value })
-                }
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              <label className="mb-2 block text-sm font-medium text-gray-700">End Date</label>
+              <input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                value={filters.status}
-                onChange={(e) =>
-                  setFilters({ ...filters, status: e.target.value })
-                }
-                className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
+              <label className="mb-2 block text-sm font-medium text-gray-700">Status</label>
+              <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="all">All</option>
                 <option value="pending">Pending</option>
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-
             <div className="flex items-end">
-              <button
-                onClick={handleFetchOrders}
-                disabled={loading}
-                className="w-full rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:bg-gray-400"
-              >
+              <button onClick={handleFetchOrders} disabled={loading} className="w-full rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:bg-gray-400">
                 {loading ? 'Loading...' : 'Fetch Orders'}
               </button>
             </div>
           </div>
 
-          {(error || actionError) && (
-            <div className="rounded border border-red-400 bg-red-100 p-3 text-red-700">
-              {actionError || error}
-            </div>
-          )}
-
-          {successMessage && (
-            <div className="mt-3 rounded border border-green-400 bg-green-100 p-3 text-green-700">
-              {successMessage}
-            </div>
-          )}
+          {(error || actionError) && <div className="rounded border border-red-400 bg-red-100 p-3 text-red-700">{actionError || error}</div>}
+          {successMessage && <div className="mt-3 rounded border border-green-400 bg-green-100 p-3 text-green-700">{successMessage}</div>}
         </div>
 
         {orders.length > 0 && (
           <>
-            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm font-medium text-gray-500">Orders in View</p>
-                <p className="mt-2 text-3xl font-bold text-gray-900">{summary.orderCount}</p>
-              </div>
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm font-medium text-gray-500">Total Sales</p>
-                <p className="mt-2 text-3xl font-bold text-green-600">₱{summary.totalSales.toFixed(2)}</p>
-              </div>
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm font-medium text-gray-500">Paid Orders</p>
-                <p className="mt-2 text-3xl font-bold text-green-600">{summary.paidOrders}</p>
-              </div>
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm font-medium text-gray-500">Unpaid Orders</p>
-                <p className="mt-2 text-3xl font-bold text-yellow-600">{summary.unpaidOrders}</p>
-              </div>
-              <div className="rounded-xl bg-white p-5 shadow">
-                <p className="text-sm font-medium text-gray-500">Pending Orders</p>
-                <p className="mt-2 text-3xl font-bold text-blue-600">{summary.pendingOrders}</p>
-              </div>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Summary</h2>
+              <p className="text-sm text-gray-500">{rangeLabel}</p>
+            </div>
+
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Orders Today</p><p className="mt-2 text-3xl font-bold text-gray-900">{todaySummary.orders}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Total Sales Today</p><p className="mt-2 text-3xl font-bold text-green-600">₱{todaySummary.sales.toFixed(2)}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Range Orders</p><p className="mt-2 text-3xl font-bold text-gray-900">{rangeSummary.orders}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Range Sales</p><p className="mt-2 text-3xl font-bold text-green-600">₱{rangeSummary.sales.toFixed(2)}</p></div>
+            </div>
+
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">COD Total</p><p className="mt-2 text-3xl font-bold text-orange-600">₱{rangeSummary.cod.toFixed(2)}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">GCASH Total</p><p className="mt-2 text-3xl font-bold text-blue-600">₱{rangeSummary.gcash.toFixed(2)}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">GOtyme Total</p><p className="mt-2 text-3xl font-bold text-emerald-600">₱{rangeSummary.gotyme.toFixed(2)}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">UnionBank Total</p><p className="mt-2 text-3xl font-bold text-indigo-600">₱{rangeSummary.unionbank.toFixed(2)}</p></div>
             </div>
 
             <div className="rounded-lg bg-white p-4 md:p-6 shadow">
               <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-800">
-                    Orders ({filteredOrders.length})
-                  </h2>
-                  {searchTerm && (
-                    <p className="mt-1 text-sm text-gray-500">
-                      Showing {filteredOrders.length} of {orders.length} orders
-                    </p>
-                  )}
+                  <h2 className="text-xl font-semibold text-gray-800">Orders ({filteredOrders.length})</h2>
+                  {searchTerm && <p className="mt-1 text-sm text-gray-500">Showing {filteredOrders.length} of {orders.length} orders</p>}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <button
-                    onClick={handleClearCompletedOrders}
-                    disabled={clearingCompleted || completedCount === 0}
-                    className="rounded-md bg-red-600 px-4 py-2 text-white transition hover:bg-red-700 disabled:bg-gray-400"
-                  >
+                  <button onClick={handleClearCompletedOrders} disabled={clearingCompleted || completedCount === 0} className="rounded-md bg-red-600 px-4 py-2 text-white transition hover:bg-red-700 disabled:bg-gray-400">
                     {clearingCompleted ? 'Clearing...' : 'Clear Completed Orders'}
                   </button>
-
-                  <button
-                    onClick={handleExportCSV}
-                    className="rounded-md bg-green-600 px-4 py-2 text-white transition hover:bg-green-700"
-                  >
-                    Export CSV
-                  </button>
+                  <button onClick={handleExportCSV} className="rounded-md bg-green-600 px-4 py-2 text-white transition hover:bg-green-700">Export CSV</button>
                 </div>
               </div>
 
               <div className="mb-4">
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by customer, phone, address, order ID, item, payment..."
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by customer, phone, address, order ID, item, payment..." className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
               <div className="space-y-4 md:hidden">
                 {filteredOrders.length === 0 ? (
-                  <div className="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center text-gray-500">
-                    No orders matched your search.
-                  </div>
+                  <div className="rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center text-gray-500">No orders matched your search.</div>
                 ) : (
                   filteredOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.orderId;
@@ -467,41 +388,22 @@ export const AdminPanel = () => {
                         </div>
 
                         <div className="mb-3 flex flex-wrap gap-2">
-                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>
-                            {order.status}
-                          </span>
-                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>
-                            {order.paymentStatus}
-                          </span>
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
                         </div>
 
                         <div className="mb-3 grid grid-cols-1 gap-3">
                           <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                              Order Status
-                            </label>
-                            <select
-                              value={order.status}
-                              onChange={(e) => handleStatusChange(order.orderId, e.target.value)}
-                              disabled={savingOrderId === order.orderId}
-                              className="w-full rounded-md border border-gray-300 px-3 py-2"
-                            >
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Order Status</label>
+                            <select value={order.status} onChange={(e) => handleStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="w-full rounded-md border border-gray-300 px-3 py-2">
                               <option value="pending">Pending</option>
                               <option value="completed">Completed</option>
                               <option value="cancelled">Cancelled</option>
                             </select>
                           </div>
-
                           <div>
-                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">
-                              Payment Status
-                            </label>
-                            <select
-                              value={order.paymentStatus}
-                              onChange={(e) => handlePaymentStatusChange(order.orderId, e.target.value)}
-                              disabled={savingOrderId === order.orderId}
-                              className="w-full rounded-md border border-gray-300 px-3 py-2"
-                            >
+                            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">Payment Status</label>
+                            <select value={order.paymentStatus} onChange={(e) => handlePaymentStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="w-full rounded-md border border-gray-300 px-3 py-2">
                               <option value="unpaid">Unpaid</option>
                               <option value="paid">Paid</option>
                             </select>
@@ -509,24 +411,11 @@ export const AdminPanel = () => {
                         </div>
 
                         <div className="mt-4 grid grid-cols-3 gap-2">
-                          <button
-                            onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)}
-                            className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800"
-                          >
+                          <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-sm text-white hover:bg-gray-800">
                             {isExpanded ? 'Hide' : 'View'}
                           </button>
-                          <button
-                            onClick={() => handlePrintReceipt(order)}
-                            className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-                          >
-                            Print
-                          </button>
-                          <button
-                            onClick={() => handlePdfReceipt(order)}
-                            className="rounded-md bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700"
-                          >
-                            PDF
-                          </button>
+                          <button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">Print</button>
+                          <button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-purple-600 px-3 py-2 text-sm text-white hover:bg-purple-700">PDF</button>
                         </div>
 
                         {isExpanded && (
@@ -582,15 +471,10 @@ export const AdminPanel = () => {
                   </thead>
                   <tbody>
                     {filteredOrders.length === 0 ? (
-                      <tr>
-                        <td colSpan="11" className="px-4 py-6 text-center text-gray-500">
-                          No orders matched your search.
-                        </td>
-                      </tr>
+                      <tr><td colSpan="11" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
                     ) : (
                       filteredOrders.map((order) => {
                         const isExpanded = expandedOrderId === order.orderId;
-
                         return (
                           <React.Fragment key={order.orderId}>
                             <tr className="border-b align-top hover:bg-gray-50">
@@ -601,22 +485,8 @@ export const AdminPanel = () => {
                               <td className="px-4 py-3">{order.paymentMethod || 'N/A'}</td>
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
-                                  <span
-                                    className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(
-                                      order.paymentStatus
-                                    )}`}
-                                  >
-                                    {order.paymentStatus}
-                                  </span>
-
-                                  <select
-                                    value={order.paymentStatus}
-                                    onChange={(e) =>
-                                      handlePaymentStatusChange(order.orderId, e.target.value)
-                                    }
-                                    disabled={savingOrderId === order.orderId}
-                                    className="rounded-md border border-gray-300 px-3 py-2"
-                                  >
+                                  <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
+                                  <select value={order.paymentStatus} onChange={(e) => handlePaymentStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
                                     <option value="unpaid">Unpaid</option>
                                     <option value="paid">Paid</option>
                                   </select>
@@ -624,27 +494,11 @@ export const AdminPanel = () => {
                               </td>
                               <td className="px-4 py-3">{order.itemsSummary || 'No items'}</td>
                               <td className="px-4 py-3 text-center">{order.itemCount}</td>
-                              <td className="px-4 py-3 text-right font-semibold">
-                                ₱{Number(order.totalAmount).toFixed(2)}
-                              </td>
+                              <td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount).toFixed(2)}</td>
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
-                                  <span
-                                    className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(
-                                      order.status
-                                    )}`}
-                                  >
-                                    {order.status}
-                                  </span>
-
-                                  <select
-                                    value={order.status}
-                                    onChange={(e) =>
-                                      handleStatusChange(order.orderId, e.target.value)
-                                    }
-                                    disabled={savingOrderId === order.orderId}
-                                    className="rounded-md border border-gray-300 px-3 py-2"
-                                  >
+                                  <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
+                                  <select value={order.status} onChange={(e) => handleStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
                                     <option value="pending">Pending</option>
                                     <option value="completed">Completed</option>
                                     <option value="cancelled">Cancelled</option>
@@ -653,95 +507,40 @@ export const AdminPanel = () => {
                               </td>
                               <td className="px-4 py-3 text-center">
                                 <div className="flex flex-col gap-2">
-                                  <button
-                                    onClick={() =>
-                                      setExpandedOrderId(isExpanded ? null : order.orderId)
-                                    }
-                                    className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800"
-                                  >
+                                  <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800">
                                     {isExpanded ? 'Hide' : 'View'}
                                   </button>
-                                  <button
-                                    onClick={() => handlePrintReceipt(order)}
-                                    className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700"
-                                  >
-                                    Print
-                                  </button>
-                                  <button
-                                    onClick={() => handlePdfReceipt(order)}
-                                    className="rounded-md bg-purple-600 px-3 py-2 text-white hover:bg-purple-700"
-                                  >
-                                    PDF
-                                  </button>
+                                  <button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">Print</button>
+                                  <button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-purple-600 px-3 py-2 text-white hover:bg-purple-700">PDF</button>
                                 </div>
                               </td>
                             </tr>
-
                             {isExpanded && (
                               <tr className="border-b bg-gray-50">
                                 <td colSpan="11" className="px-6 py-4">
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
-                                      <h3 className="mb-3 font-semibold text-gray-800">
-                                        Order Details
-                                      </h3>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Order ID:</span>{' '}
-                                        {order.orderId}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Date Ordered:</span>{' '}
-                                        {order.orderDate}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Customer:</span>{' '}
-                                        {order.customerName}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Phone:</span>{' '}
-                                        {order.phoneNumber}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Address:</span>{' '}
-                                        {order.deliveryAddress}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Payment Method:</span>{' '}
-                                        {order.paymentMethod || 'Not specified'}
-                                      </p>
-                                      <p className="mb-2 text-sm text-gray-700">
-                                        <span className="font-semibold">Payment Status:</span>{' '}
-                                        {order.paymentStatus}
-                                      </p>
-                                      <p className="text-sm text-gray-700">
-                                        <span className="font-semibold">Special Instructions:</span>{' '}
-                                        {order.specialInstructions || 'None'}
-                                      </p>
+                                      <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Order ID:</span> {order.orderId}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Date Ordered:</span> {order.orderDate}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Customer:</span> {order.customerName}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Status:</span> {order.paymentStatus}</p>
+                                      <p className="text-sm text-gray-700"><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
                                     </div>
-
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
-                                      <h3 className="mb-3 font-semibold text-gray-800">
-                                        Ordered Items
-                                      </h3>
-
+                                      <h3 className="mb-3 font-semibold text-gray-800">Ordered Items</h3>
                                       {order.orderItems.length > 0 ? (
                                         <div className="space-y-3">
                                           {order.orderItems.map((item, index) => (
-                                            <div
-                                              key={`${order.orderId}-${index}`}
-                                              className="flex items-start justify-between border-b border-gray-100 pb-2"
-                                            >
+                                            <div key={`${order.orderId}-${index}`} className="flex items-start justify-between border-b border-gray-100 pb-2">
                                               <div>
-                                                <p className="font-medium text-gray-800">
-                                                  {item.name}
-                                                </p>
-                                                <p className="text-sm text-gray-500">
-                                                  Quantity: {item.quantity}
-                                                </p>
+                                                <p className="font-medium text-gray-800">{item.name}</p>
+                                                <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
                                               </div>
-                                              <p className="font-semibold text-gray-800">
-                                                ₱{Number(item.subtotal).toFixed(2)}
-                                              </p>
+                                              <p className="font-semibold text-gray-800">₱{Number(item.subtotal).toFixed(2)}</p>
                                             </div>
                                           ))}
                                         </div>
