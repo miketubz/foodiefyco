@@ -9,6 +9,7 @@ function Cart({
   onClose,
   onRemove,
   onPlaceOrder,
+  onApplyPromo,
   customerName,
   setCustomerName,
   phoneNumber,
@@ -24,6 +25,9 @@ function Cart({
   discountAmount = 0,
   subtotal = 0,
   isSubmitting = false,
+  isApplyingPromo = false,
+  promoMessage = '',
+  promoError = '',
 }) {
   const finalTotal = Math.max(0, Number(subtotal) - Number(discountAmount || 0));
 
@@ -41,7 +45,7 @@ function Cart({
           <h2 className="text-xl font-bold">🛒 Your Cart</h2>
           <button
             onClick={onClose}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isApplyingPromo}
             className="text-2xl font-bold disabled:opacity-50"
           >
             ✕
@@ -150,14 +154,38 @@ function Cart({
               <label className="mb-2 block text-sm font-semibold text-gray-700">
                 Promo Code
               </label>
-              <input
-                type="text"
-                value={promoCode}
-                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                placeholder="Enter promo code"
-                className="w-full rounded-xl border border-gray-300 px-3 py-2 uppercase"
-                disabled={isSubmitting}
-              />
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                  placeholder="Enter promo code"
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2 uppercase"
+                  disabled={isSubmitting || isApplyingPromo}
+                />
+                <button
+                  type="button"
+                  onClick={onApplyPromo}
+                  disabled={isSubmitting || isApplyingPromo || !promoCode.trim()}
+                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {isApplyingPromo ? 'Applying...' : 'Apply'}
+                </button>
+              </div>
+
+              {promoMessage && (
+                <p className="mt-2 text-sm font-medium text-green-600">
+                  {promoMessage}
+                </p>
+              )}
+
+              {promoError && (
+                <p className="mt-2 text-sm font-medium text-red-600">
+                  {promoError}
+                </p>
+              )}
+
               <p className="mt-2 text-xs text-gray-500">
                 Follow us on Facebook for gifts and codes
               </p>
@@ -218,7 +246,7 @@ function Cart({
 
           <button
             onClick={onPlaceOrder}
-            disabled={!isFormValid || isSubmitting}
+            disabled={!isFormValid || isSubmitting || isApplyingPromo}
             className="w-full rounded-2xl bg-orange-500 py-3 font-bold text-white transition hover:bg-orange-600 disabled:opacity-50"
           >
             {isSubmitting ? 'Placing Order...' : 'Place Order'}
