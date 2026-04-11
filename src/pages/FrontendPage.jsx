@@ -22,6 +22,9 @@ function FrontendPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+
   const subtotal = useMemo(
     () =>
       cartItems.reduce(
@@ -31,10 +34,39 @@ function FrontendPage() {
     [cartItems]
   );
 
-  const finalTotal = useMemo(
-    () => Math.max(0, Number(subtotal) - Number(discountAmount || 0)),
-    [subtotal, discountAmount]
-  );
+  const categories = useMemo(() => {
+    const uniqueCategories = Array.from(
+      new Set(
+        (menuItems || [])
+          .map((item) => (item.category || '').trim())
+          .filter(Boolean)
+      )
+    );
+
+    return uniqueCategories.sort((a, b) => a.localeCompare(b));
+  }, [menuItems]);
+
+  const filteredMenuItems = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return (menuItems || []).filter((item) => {
+      const matchesCategory =
+        selectedCategory === 'all' || (item.category || '') === selectedCategory;
+
+      const searchableText = [
+        item.name,
+        item.category,
+        item.description,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
+
+      return matchesCategory && matchesSearch;
+    });
+  }, [menuItems, searchTerm, selectedCategory]);
 
   const handleAddToCart = (item) => {
     setCartItems((prev) => {
@@ -297,16 +329,64 @@ function FrontendPage() {
           </div>
         )}
 
-      <section className="mb-6 flex justify-center px-4 text-center">
-  <div className="w-full max-w-2xl">
-    <p className="mb-2 text-lg font-bold uppercase tracking-[0.28em] text-orange-500 sm:text-xl">
-      Our Menu
-    </p>
-    <h2 className="mx-auto max-w-md text-2xl font-bold tracking-tight text-gray-900 sm:max-w-none sm:text-3xl">
-      Choose your favorites
-    </h2>
-  </div>
-</section>
+        <section className="mb-6 flex justify-center px-4 text-center">
+          <div className="w-full max-w-2xl">
+            <p className="mb-2 text-lg font-bold uppercase tracking-[0.28em] text-orange-500 sm:text-xl">
+              Our Menu
+            </p>
+            <h2 className="mx-auto max-w-md text-2xl font-bold tracking-tight text-gray-900 sm:max-w-none sm:text-3xl">
+              Choose your favorites
+            </h2>
+          </div>
+        </section>
+
+        <section className="mb-6 rounded-2xl bg-white p-4 shadow-sm">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-gray-700">
+                Search menu
+              </label>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search by item name, category, or description"
+                className="w-full rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+
+            <div className="text-sm text-gray-500 md:text-right">
+              Showing {filteredMenuItems.length} of {menuItems.length} items
+            </div>
+          </div>
+
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${
+                selectedCategory === 'all'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+              }`}
+            >
+              All
+            </button>
+
+            {categories.map((category) => (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(category)}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  selectedCategory === category
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+        </section>
 
         {loading && <p className="text-gray-600">Loading menu...</p>}
 
@@ -316,9 +396,18 @@ function FrontendPage() {
           </div>
         )}
 
-        {!loading && !error && (
+        {!loading && !error && filteredMenuItems.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center shadow-sm">
+            <h3 className="text-lg font-semibold text-gray-900">No menu items found</h3>
+            <p className="mt-2 text-sm text-gray-500">
+              Try another search term or choose a different category.
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && filteredMenuItems.length > 0 && (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <MenuCard
                 key={item.id}
                 item={item}
