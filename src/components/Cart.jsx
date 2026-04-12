@@ -1,7 +1,11 @@
+import gcashQr from '../../pix/gcashqr.png';
+import gotymeQr from '../../pix/nicogotyme.jpg';
+import unionbankQr from '../../pix/unionbankqr.jpg';
+
 const paymentQrMap = {
-  GCASH: '/pix/gcashqr.png',
-  GOtyme: '/pix/nicogotyme.jpg',
-  UnionBank: '/pix/unionbankqr.jpg',
+  GCASH: gcashQr,
+  GOtyme: gotymeQr,
+  UnionBank: unionbankQr,
 };
 
 function Cart({
