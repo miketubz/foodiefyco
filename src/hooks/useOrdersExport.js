@@ -19,6 +19,8 @@ export const useOrdersExport = () => {
         payment_status,
         promo_code,
         discount_amount,
+        payment_proof_option,
+        payment_proof_path,
         customer_name,
         phone_number,
         delivery_address,
@@ -45,7 +47,10 @@ export const useOrdersExport = () => {
         query = query.eq('status', filters.status);
       }
 
-      const { data, error: fetchError } = await query.order('created_at', { ascending: false });
+      const { data, error: fetchError } = await query.order('created_at', {
+        ascending: false,
+      });
+
       if (fetchError) throw fetchError;
 
       const transformedOrders = (data || []).map((order) => {
@@ -55,6 +60,11 @@ export const useOrdersExport = () => {
           price: Number(item.price || 0),
           subtotal: Number(item.price || 0) * Number(item.quantity || 0),
         }));
+
+        const paymentProofPath = order.payment_proof_path || '';
+        const paymentProofUrl = paymentProofPath
+          ? supabase.storage.from('payment-proofs').getPublicUrl(paymentProofPath).data.publicUrl
+          : '';
 
         return {
           orderId: order.id,
@@ -67,6 +77,9 @@ export const useOrdersExport = () => {
           paymentStatus: order.payment_status || 'unpaid',
           promoCode: order.promo_code || '',
           discountAmount: Number(order.discount_amount || 0),
+          paymentProofOption: order.payment_proof_option || '',
+          paymentProofPath,
+          paymentProofUrl,
           orderDate: new Date(order.created_at).toLocaleString(),
           totalAmount: Number(order.total_amount || 0),
           itemCount: orderItems.reduce((sum, item) => sum + item.quantity, 0),
