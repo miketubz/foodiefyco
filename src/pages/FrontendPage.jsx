@@ -17,6 +17,9 @@ function FrontendPage() {
   const [paymentMethod, setPaymentMethod] = useState('COD');
   const [promoCode, setPromoCode] = useState('');
 
+  const [paymentProofOption, setPaymentProofOption] = useState('upload_now');
+  const [paymentProofFile, setPaymentProofFile] = useState(null);
+
   const [orderConfirmation, setOrderConfirmation] = useState(null);
   const [orderError, setOrderError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,6 +76,13 @@ function FrontendPage() {
     setPromoMessage('');
     setPromoError('');
   }, [promoCode, subtotal]);
+
+  useEffect(() => {
+    if (paymentMethod === 'COD') {
+      setPaymentProofOption('upload_now');
+      setPaymentProofFile(null);
+    }
+  }, [paymentMethod]);
 
   const handleAddToCart = (item) => {
     setCartItems((prev) => {
@@ -176,6 +186,28 @@ function FrontendPage() {
     }
   };
 
+  const uploadPaymentProof = async () => {
+    if (!paymentProofFile) return '';
+
+    const fileExt = paymentProofFile.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+    const folder = paymentMethod.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const filePath = `${folder}/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from('payment-proofs')
+      .upload(filePath, paymentProofFile, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (error) {
+      throw new Error(`Payment proof upload failed: ${error.message}`);
+    }
+
+    return filePath;
+  };
+
   const handlePlaceOrder = async () => {
     if (cartItems.length === 0 || isSubmitting) return;
 
@@ -202,7 +234,17 @@ function FrontendPage() {
       return;
     }
 
+    if (
+      paymentMethod !== 'COD' &&
+      paymentProofOption === 'upload_now' &&
+      !paymentProofFile
+    ) {
+      setOrderError('Please upload proof of payment or choose scan upon delivery.');
+      return;
+    }
+
     setIsSubmitting(true);
+    let uploadedProofPath = '';
 
     try {
       const normalizedPromo = promoCode.trim().toUpperCase();
@@ -219,6 +261,10 @@ function FrontendPage() {
 
       setDiscountAmount(appliedDiscount);
 
+      if (paymentMethod !== 'COD' && paymentProofOption === 'upload_now') {
+        uploadedProofPath = await uploadPaymentProof();
+      }
+
       const { data: orderData, error: orderErrorResponse } = await supabase
         .from('orders')
         .insert([
@@ -232,12 +278,18 @@ function FrontendPage() {
             discount_amount: appliedDiscount,
             total_amount: totalAfterDiscount,
             status: 'pending',
+            payment_proof_option: paymentMethod === 'COD' ? null : paymentProofOption,
+            payment_proof_path: uploadedProofPath || null,
           },
         ])
         .select()
         .single();
 
       if (orderErrorResponse) {
+        if (uploadedProofPath) {
+          await supabase.storage.from('payment-proofs').remove([uploadedProofPath]);
+        }
+
         setOrderError(`Failed to place order: ${orderErrorResponse.message}`);
         setIsSubmitting(false);
         return;
@@ -269,6 +321,16 @@ function FrontendPage() {
         address: deliveryAddress.trim(),
         specialInstructions: specialInstructions.trim(),
         paymentMethod,
+        paymentProofOption:
+          paymentMethod === 'COD'
+            ? 'Not required'
+            : paymentProofOption === 'upload_now'
+            ? 'Upload now'
+            : 'Scan upon delivery',
+        paymentProofUploaded:
+          paymentMethod !== 'COD' &&
+          paymentProofOption === 'upload_now' &&
+          Boolean(uploadedProofPath),
         promoCode: normalizedPromo || 'None',
         discountAmount: appliedDiscount,
         subtotal,
@@ -292,9 +354,15 @@ function FrontendPage() {
       setDiscountAmount(0);
       setPromoMessage('');
       setPromoError('');
+      setPaymentProofOption('upload_now');
+      setPaymentProofFile(null);
       setIsSubmitting(false);
     } catch (err) {
-      setOrderError(`Promo code validation failed: ${err.message}`);
+      if (uploadedProofPath) {
+        await supabase.storage.from('payment-proofs').remove([uploadedProofPath]);
+      }
+
+      setOrderError(err.message || 'Failed to place order.');
       setIsSubmitting(false);
     }
   };
@@ -361,6 +429,10 @@ function FrontendPage() {
             <p className="mb-1">Phone: {orderConfirmation.phone}</p>
             <p className="mb-1">Address: {orderConfirmation.address}</p>
             <p className="mb-1">Payment Method: {orderConfirmation.paymentMethod}</p>
+            <p className="mb-1">Proof Option: {orderConfirmation.paymentProofOption}</p>
+            <p className="mb-1">
+              Proof Uploaded: {orderConfirmation.paymentProofUploaded ? 'Yes' : 'No'}
+            </p>
             <p className="mb-1">Promo Code: {orderConfirmation.promoCode}</p>
             <p className="mb-1">Items: {orderConfirmation.itemCount}</p>
             <p className="mb-1">
@@ -502,6 +574,10 @@ function FrontendPage() {
           setPaymentMethod={setPaymentMethod}
           promoCode={promoCode}
           setPromoCode={setPromoCode}
+          paymentProofOption={paymentProofOption}
+          setPaymentProofOption={setPaymentProofOption}
+          paymentProofFile={paymentProofFile}
+          setPaymentProofFile={setPaymentProofFile}
           discountAmount={discountAmount}
           subtotal={subtotal}
           isSubmitting={isSubmitting}
