@@ -22,6 +22,10 @@ function Cart({
   setPaymentMethod,
   promoCode,
   setPromoCode,
+  paymentProofOption,
+  setPaymentProofOption,
+  paymentProofFile,
+  setPaymentProofFile,
   discountAmount = 0,
   subtotal = 0,
   isSubmitting = false,
@@ -146,6 +150,71 @@ function Cart({
                     alt={`${paymentMethod} QR`}
                     className="mx-auto h-56 w-56 rounded-xl object-contain"
                   />
+                </div>
+              )}
+
+              {paymentMethod !== 'COD' && (
+                <div className="mt-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="mb-3 text-sm font-semibold text-gray-700">
+                    Proof of Payment
+                  </p>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setPaymentProofOption('upload_now')}
+                      disabled={isSubmitting || isApplyingPromo}
+                      className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                        paymentProofOption === 'upload_now'
+                          ? 'border-orange-500 bg-orange-50 text-orange-600'
+                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Upload now
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentProofOption('scan_on_delivery');
+                        setPaymentProofFile(null);
+                      }}
+                      disabled={isSubmitting || isApplyingPromo}
+                      className={`rounded-xl border px-3 py-3 text-sm font-semibold transition ${
+                        paymentProofOption === 'scan_on_delivery'
+                          ? 'border-orange-500 bg-orange-50 text-orange-600'
+                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Scan upon delivery
+                    </button>
+                  </div>
+
+                  {paymentProofOption === 'upload_now' && (
+                    <div className="mt-4">
+                      <label className="mb-2 block text-sm font-medium text-gray-700">
+                        Upload receipt screenshot
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={isSubmitting || isApplyingPromo}
+                        onChange={(e) => setPaymentProofFile(e.target.files?.[0] || null)}
+                        className="block w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+                      />
+                      {paymentProofFile && (
+                        <p className="mt-2 text-sm text-green-600">
+                          Selected: {paymentProofFile.name}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {paymentProofOption === 'scan_on_delivery' && (
+                    <p className="mt-3 text-sm text-gray-500">
+                      Customer will pay by scanning when the order is delivered.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
