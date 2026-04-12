@@ -4,11 +4,14 @@ import MenuAdminPanel from './components/MenuAdminPanel.jsx';
 import RequireAdmin from './components/RequireAdmin.jsx';
 import AdminLoginPage from './pages/AdminLoginPage.jsx';
 import FrontendPage from './pages/FrontendPage.jsx';
+import GalleryPage from './pages/GalleryPage.jsx';
+import AdminGalleryPage from './pages/AdminGalleryPage.jsx';
 
 function App() {
   return (
     <Routes>
       <Route path="/" element={<FrontendPage />} />
+      <Route path="/gallery" element={<GalleryPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
 
       <Route
@@ -25,6 +28,15 @@ function App() {
         element={
           <RequireAdmin>
             <MenuAdminPanel />
+          </RequireAdmin>
+        }
+      />
+
+      <Route
+        path="/admin/gallery"
+        element={
+          <RequireAdmin>
+            <AdminGalleryPage />
           </RequireAdmin>
         }
       />
