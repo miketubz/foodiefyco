@@ -85,6 +85,22 @@ function FrontendPage() {
     }
   }, [paymentMethod]);
 
+  const isPlaceholderValue = (value) => {
+    const normalized = value.trim().toLowerCase().replace(/\./g, '');
+    return ['n/a', 'na', 'none', 'unknown', '-'].includes(normalized);
+  };
+
+  const isValidPhoneNumber = (value) => {
+    if (!value.trim() || isPlaceholderValue(value)) return false;
+    const digits = value.replace(/\D/g, '');
+    return digits.length >= 7;
+  };
+
+  const isValidAddress = (value) => {
+    if (!value.trim() || isPlaceholderValue(value)) return false;
+    return value.trim().length >= 5;
+  };
+
   const handleAddToCart = (item) => {
     setCartItems((prev) => {
       const existingItem = prev.find((cartItem) => cartItem.id === item.id);
@@ -220,13 +236,13 @@ function FrontendPage() {
       return;
     }
 
-    if (!phoneNumber.trim()) {
-      setOrderError('Please enter your phone number.');
+    if (!isValidPhoneNumber(phoneNumber)) {
+      setOrderError('Please enter a valid phone number.');
       return;
     }
 
-    if (!deliveryAddress.trim()) {
-      setOrderError('Please enter your delivery address.');
+    if (!isValidAddress(deliveryAddress)) {
+      setOrderError('Please enter a valid delivery address.');
       return;
     }
 
