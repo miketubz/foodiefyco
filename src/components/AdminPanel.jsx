@@ -20,6 +20,7 @@ export const AdminPanel = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [clearingCompleted, setClearingCompleted] = useState(false);
+  const [clearingCancelled, setClearingCancelled] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [todaySummary, setTodaySummary] = useState({
     orders: 0,
@@ -178,6 +179,22 @@ export const AdminPanel = () => {
     setSuccessMessage(`Payment status updated to ${newPaymentStatus}.`);
   };
 
+  const removeProofFiles = async (targetOrders) => {
+    const proofPaths = targetOrders.map((order) => order.paymentProofPath).filter(Boolean);
+
+    if (proofPaths.length === 0) return { ok: true };
+
+    const { error: storageError } = await supabase.storage
+      .from('payment-proofs')
+      .remove(proofPaths);
+
+    if (storageError) {
+      return { ok: false, message: storageError.message };
+    }
+
+    return { ok: true };
+  };
+
   const handleClearCompletedOrders = async () => {
     const completedOrders = orders.filter((order) => order.status === 'completed');
     if (completedOrders.length === 0) {
@@ -194,18 +211,11 @@ export const AdminPanel = () => {
     setActionError('');
     setSuccessMessage('');
 
-    const proofPaths = completedOrders.map((order) => order.paymentProofPath).filter(Boolean);
-
-    if (proofPaths.length > 0) {
-      const { error: storageError } = await supabase.storage
-        .from('payment-proofs')
-        .remove(proofPaths);
-
-      if (storageError) {
-        setActionError(`Could not delete proof images: ${storageError.message}`);
-        setClearingCompleted(false);
-        return;
-      }
+    const proofResult = await removeProofFiles(completedOrders);
+    if (!proofResult.ok) {
+      setActionError(`Could not delete proof images: ${proofResult.message}`);
+      setClearingCompleted(false);
+      return;
     }
 
     const ids = completedOrders.map((order) => order.orderId);
@@ -221,6 +231,44 @@ export const AdminPanel = () => {
     setClearingCompleted(false);
     setExpandedOrderId(null);
     setSuccessMessage('Completed orders and uploaded proof files cleared.');
+  };
+
+  const handleClearCancelledOrders = async () => {
+    const cancelledOrders = orders.filter((order) => order.status === 'cancelled');
+    if (cancelledOrders.length === 0) {
+      alert('No cancelled orders to clear.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Clear all cancelled orders? This also removes uploaded proof files.'
+    );
+    if (!confirmed) return;
+
+    setClearingCancelled(true);
+    setActionError('');
+    setSuccessMessage('');
+
+    const proofResult = await removeProofFiles(cancelledOrders);
+    if (!proofResult.ok) {
+      setActionError(`Could not delete proof images: ${proofResult.message}`);
+      setClearingCancelled(false);
+      return;
+    }
+
+    const ids = cancelledOrders.map((order) => order.orderId);
+    const { error: deleteError } = await supabase.from('orders').delete().in('id', ids);
+
+    if (deleteError) {
+      setActionError(deleteError.message);
+      setClearingCancelled(false);
+      return;
+    }
+
+    await handleFetchOrders();
+    setClearingCancelled(false);
+    setExpandedOrderId(null);
+    setSuccessMessage('Cancelled orders and uploaded proof files cleared.');
   };
 
   const handlePrintReceipt = (order) => {
@@ -358,6 +406,11 @@ export const AdminPanel = () => {
 
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
+    [orders]
+  );
+
+  const cancelledCount = useMemo(
+    () => orders.filter((order) => order.status === 'cancelled').length,
     [orders]
   );
 
@@ -534,6 +587,9 @@ export const AdminPanel = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  <button onClick={handleClearCancelledOrders} disabled={clearingCancelled || cancelledCount === 0} className="rounded-md bg-rose-600 px-4 py-2 text-white transition hover:bg-rose-700 disabled:bg-gray-400">
+                    {clearingCancelled ? 'Clearing...' : 'Clear Cancelled Orders'}
+                  </button>
                   <button onClick={handleClearCompletedOrders} disabled={clearingCompleted || completedCount === 0} className="rounded-md bg-red-600 px-4 py-2 text-white transition hover:bg-red-700 disabled:bg-gray-400">
                     {clearingCompleted ? 'Clearing...' : 'Clear Completed Orders'}
                   </button>
