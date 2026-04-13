@@ -6,6 +6,7 @@ import AdminLoginPage from './pages/AdminLoginPage.jsx';
 import FrontendPage from './pages/FrontendPage.jsx';
 import GalleryPage from './pages/GalleryPage.jsx';
 import AdminGalleryPage from './pages/AdminGalleryPage.jsx';
+import AdminExternalPage from './pages/AdminExternalPage.jsx';
 
 function App() {
   return (
@@ -37,6 +38,15 @@ function App() {
         element={
           <RequireAdmin>
             <AdminGalleryPage />
+          </RequireAdmin>
+        }
+      />
+
+      <Route
+        path="/admin/external"
+        element={
+          <RequireAdmin>
+            <AdminExternalPage />
           </RequireAdmin>
         }
       />
