@@ -1,46 +1,42 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient.js';
 
-const initialMenuForm = {
-  name: '',
-  description: '',
-  price: '',
-  seller_price: '',
-  category: '',
-  image_url: '',
-  sort_order: '',
-  is_active: true,
-  external_only: false,
-};
-
-function MenuAdminPanel() {
-  const [menuItems, setMenuItems] = useState([]);
-  const [newItem, setNewItem] = useState(initialMenuForm);
-  const [editingId, setEditingId] = useState(null);
+export default function MenuAdminPanel() {
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingId, setSavingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [message, setMessage] = useState('');
+  const [newItem, setNewItem] = useState({
+    name: '',
+    price: '',
+    category: '',
+    image_url: '',
+    sort_order: 0,
+    is_available: true,
+  });
 
   const fetchMenuItems = async () => {
     setLoading(true);
     setError('');
+    setMessage('');
 
     const { data, error } = await supabase
-      .from('menu_items')
-      .select('*')
+      .from('menu_item')
+      .select('id, name, price, category, image_url, is_available, sort_order')
       .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false });
+      .order('id', { ascending: true });
 
     if (error) {
-      setError(`Failed to load menu items: ${error.message}`);
-      setMenuItems([]);
-      setLoading(false);
-      return;
+      setError(error.message);
+      setItems([]);
+    } else {
+      setItems(data || []);
     }
 
-    setMenuItems(data || []);
     setLoading(false);
   };
 
@@ -48,435 +44,345 @@ function MenuAdminPanel() {
     fetchMenuItems();
   }, []);
 
-  const filteredItems = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-
-    if (!term) return menuItems;
-
-    return menuItems.filter((item) => {
-      const combined = [
-        item.name,
-        item.description,
-        item.category,
-        item.external_only ? 'external only' : 'front store',
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      return combined.includes(term);
-    });
-  }, [menuItems, searchTerm]);
-
-  const clearForm = () => {
-    setNewItem(initialMenuForm);
-    setEditingId(null);
+  const handleChange = (id, field, value) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    );
   };
 
-  const handleInputChange = (event) => {
-    const { name, value, type, checked } = event.target;
-
-    setNewItem((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
+  const handleNewItemChange = (field, value) => {
+    setNewItem((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleEdit = (item) => {
-    setEditingId(item.id);
-    setSuccessMessage('');
+  const handleCreate = async () => {
     setError('');
-    setNewItem({
-      name: item.name || '',
-      description: item.description || '',
-      price: item.price ?? '',
-      seller_price: item.seller_price ?? '',
-      category: item.category || '',
-      image_url: item.image_url || '',
-      sort_order: item.sort_order ?? '',
-      is_active: Boolean(item.is_active),
-      external_only: Boolean(item.external_only),
-    });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    setSuccessMessage('');
+    setMessage('');
 
     if (!newItem.name.trim()) {
-      setError('Menu item name is required.');
-      setSaving(false);
+      setError('Name is required.');
       return;
     }
 
-    if (newItem.price === '' || Number.isNaN(Number(newItem.price))) {
-      setError('Regular price is required.');
-      setSaving(false);
+    if (!newItem.price) {
+      setError('Price is required.');
       return;
     }
 
-    const payload = {
-      name: newItem.name.trim(),
-      description: newItem.description.trim(),
-      price: Number(newItem.price),
-      seller_price:
-        newItem.seller_price === '' || Number.isNaN(Number(newItem.seller_price))
-          ? null
-          : Number(newItem.seller_price),
-      category: newItem.category.trim(),
-      image_url: newItem.image_url.trim(),
-      sort_order:
-        newItem.sort_order === '' || Number.isNaN(Number(newItem.sort_order))
-          ? 0
-          : Number(newItem.sort_order),
-      is_active: Boolean(newItem.is_active),
-      external_only: Boolean(newItem.external_only),
-    };
+    setCreating(true);
 
-    let response;
+    const { error } = await supabase.from('menu_item').insert([
+      {
+        name: newItem.name.trim(),
+        price: Number(newItem.price),
+        category: newItem.category.trim(),
+        image_url: newItem.image_url.trim(),
+        sort_order: Number(newItem.sort_order) || 0,
+        is_available: newItem.is_available,
+      },
+    ]);
 
-    if (editingId) {
-      response = await supabase
-        .from('menu_items')
-        .update(payload)
-        .eq('id', editingId);
+    if (error) {
+      setError(error.message);
     } else {
-      response = await supabase.from('menu_items').insert([payload]);
+      setMessage('New menu item added.');
+      setNewItem({
+        name: '',
+        price: '',
+        category: '',
+        image_url: '',
+        sort_order: 0,
+        is_available: true,
+      });
+      await fetchMenuItems();
     }
 
-    if (response.error) {
-      setError(`Failed to save menu item: ${response.error.message}`);
-      setSaving(false);
-      return;
+    setCreating(false);
+  };
+
+  const handleSave = async (item) => {
+    setSavingId(item.id);
+    setError('');
+    setMessage('');
+
+    const { error } = await supabase
+      .from('menu_item')
+      .update({
+        name: item.name,
+        price: Number(item.price),
+        category: item.category,
+        image_url: item.image_url,
+        sort_order: Number(item.sort_order) || 0,
+        is_available: item.is_available,
+      })
+      .eq('id', item.id);
+
+    if (error) {
+      setError(`Item ${item.id}: ${error.message}`);
+    } else {
+      setMessage(`Item ${item.id} saved successfully.`);
+      await fetchMenuItems();
     }
 
-    setSuccessMessage(editingId ? 'Menu item updated successfully.' : 'Menu item added successfully.');
-    clearForm();
-    setSaving(false);
-    await fetchMenuItems();
+    setSavingId(null);
   };
 
   const handleDelete = async (id) => {
     const confirmed = window.confirm('Delete this menu item?');
     if (!confirmed) return;
 
+    setDeletingId(id);
     setError('');
-    setSuccessMessage('');
+    setMessage('');
 
-    const { error } = await supabase.from('menu_items').delete().eq('id', id);
+    const { error } = await supabase
+      .from('menu_item')
+      .delete()
+      .eq('id', id);
 
     if (error) {
-      setError(`Failed to delete item: ${error.message}`);
-      return;
+      setError(`Item ${id}: ${error.message}`);
+    } else {
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      setMessage(`Item ${id} deleted successfully.`);
     }
 
-    setSuccessMessage('Menu item deleted successfully.');
-    await fetchMenuItems();
+    setDeletingId(null);
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 px-4 py-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-col gap-3 rounded-3xl bg-white p-6 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-orange-500">
-              FoodiefyCo Admin
-            </p>
-            <h1 className="text-3xl font-bold text-gray-900">Menu Management</h1>
-            <p className="mt-2 text-sm text-gray-500">
-              Add items for the public store, the external seller page, or both.
-            </p>
-          </div>
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <h1 className="text-3xl font-bold text-gray-900">Menu Admin Panel</h1>
 
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => (window.location.href = '/admin')}
-              className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white"
+          <div className="flex gap-3">
+            <Link
+              to="/admin"
+              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
             >
               Orders
-            </button>
-            <button
-              onClick={() => (window.location.href = '/admin/external')}
-              className="rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white"
+            </Link>
+            <Link
+              to="/admin/menu"
+              className="rounded-md bg-gray-900 px-4 py-2 text-white"
             >
-              External Orders
-            </button>
-            <button
-              onClick={() => (window.location.href = '/')}
-              className="rounded-xl border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700"
-            >
-              Front Store
-            </button>
+              Menu
+            </Link>
           </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-bold text-gray-900">
-              {editingId ? 'Edit Menu Item' : 'Add Menu Item'}
-            </h2>
-
-            {error && (
-              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            {successMessage && (
-              <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
-                {successMessage}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Name</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={newItem.name}
-                  onChange={handleInputChange}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                  placeholder="Chicken Biryani"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Description</label>
-                <textarea
-                  name="description"
-                  value={newItem.description}
-                  onChange={handleInputChange}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                  rows="3"
-                  placeholder="Short item description"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Regular Price</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    name="price"
-                    value={newItem.price}
-                    onChange={handleInputChange}
-                    className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Seller Price</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    name="seller_price"
-                    value={newItem.seller_price}
-                    onChange={handleInputChange}
-                    className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                    placeholder="Optional"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">
-                    Used on the external order page. Leave blank to use the regular price.
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Category</label>
-                  <input
-                    type="text"
-                    name="category"
-                    value={newItem.category}
-                    onChange={handleInputChange}
-                    className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                    placeholder="Meals"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Sort Order</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    name="sort_order"
-                    value={newItem.sort_order}
-                    onChange={handleInputChange}
-                    className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                    placeholder="0"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Image URL</label>
-                <input
-                  type="text"
-                  name="image_url"
-                  value={newItem.image_url}
-                  onChange={handleInputChange}
-                  className="w-full rounded-xl border border-gray-300 px-3 py-2"
-                  placeholder="https://..."
-                />
-              </div>
-
-              <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                <label className="flex items-start gap-3 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    name="is_active"
-                    checked={Boolean(newItem.is_active)}
-                    onChange={handleInputChange}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-orange-500"
-                  />
-                  <span>
-                    <span className="block font-semibold text-gray-900">Active menu item</span>
-                    <span className="text-xs text-gray-500">Turn this off to hide the item everywhere.</span>
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    name="external_only"
-                    checked={Boolean(newItem.external_only)}
-                    onChange={handleInputChange}
-                    className="mt-1 h-4 w-4 rounded border-gray-300 text-orange-500"
-                  />
-                  <span>
-                    <span className="block font-semibold text-gray-900">Post on external page only</span>
-                    <span className="text-xs text-gray-500">
-                      Hides this item from the public front store and shows it only on /admin/external.
-                    </span>
-                  </span>
-                </label>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-xl bg-orange-500 px-4 py-2 font-semibold text-white disabled:opacity-60"
-                >
-                  {saving ? 'Saving...' : editingId ? 'Update Item' : 'Add Item'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={clearForm}
-                  className="rounded-xl border border-gray-300 px-4 py-2 font-semibold text-gray-700"
-                >
-                  Clear
-                </button>
-              </div>
-            </form>
+        <div className="mb-6 rounded-xl bg-white p-6 shadow">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="text-xl font-semibold text-gray-800">Add Menu Item</h2>
+            <p className="text-sm text-gray-500">Lower sort order shows first.</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Menu Items</h2>
-                <p className="text-sm text-gray-500">Search and manage your current menu.</p>
-              </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+            <input
+              type="text"
+              placeholder="Name"
+              value={newItem.name}
+              onChange={(e) => handleNewItemChange('name', e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2"
+            />
 
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="w-full rounded-xl border border-gray-300 px-4 py-2 sm:max-w-sm"
-                placeholder="Search name, category, external only..."
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Price"
+              value={newItem.price}
+              onChange={(e) => handleNewItemChange('price', e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2"
+            />
+
+            <input
+              type="text"
+              placeholder="Category"
+              value={newItem.category}
+              onChange={(e) => handleNewItemChange('category', e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2"
+            />
+
+            <input
+              type="text"
+              placeholder="Image URL"
+              value={newItem.image_url}
+              onChange={(e) => handleNewItemChange('image_url', e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2"
+            />
+
+            <input
+              type="number"
+              placeholder="Sort Order"
+              value={newItem.sort_order}
+              onChange={(e) => handleNewItemChange('sort_order', e.target.value)}
+              className="rounded-md border border-gray-300 px-3 py-2"
+            />
+
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              className="rounded-md bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:bg-gray-400"
+            >
+              {creating ? 'Adding...' : 'Add Item'}
+            </button>
+          </div>
+
+          <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={newItem.is_available}
+              onChange={(e) => handleNewItemChange('is_available', e.target.checked)}
+              className="h-4 w-4"
+            />
+            Available
+          </label>
+
+          {newItem.image_url ? (
+            <div className="mt-4">
+              <p className="mb-2 text-sm text-gray-600">Preview</p>
+              <img
+                src={newItem.image_url}
+                alt={newItem.name || 'New menu item'}
+                className="h-24 w-24 rounded-lg border border-gray-200 object-cover"
               />
             </div>
-
-            {loading ? (
-              <p className="text-gray-500">Loading menu items...</p>
-            ) : filteredItems.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-300 px-6 py-10 text-center text-gray-500">
-                No menu items found.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {filteredItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl border border-gray-200 p-4 transition hover:shadow-sm"
-                  >
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-bold text-gray-900">{item.name}</h3>
-
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              item.is_active
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-gray-200 text-gray-600'
-                            }`}
-                          >
-                            {item.is_active ? 'Active' : 'Hidden'}
-                          </span>
-
-                          {item.external_only && (
-                            <span className="rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700">
-                              External only
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
-                          <span>Regular: ₱{Number(item.price || 0).toFixed(2)}</span>
-                          <span>
-                            Seller:{' '}
-                            {item.seller_price === null || item.seller_price === undefined || item.seller_price === ''
-                              ? 'Uses regular price'
-                              : `₱${Number(item.seller_price).toFixed(2)}`}
-                          </span>
-                          {item.category && <span>Category: {item.category}</span>}
-                          <span>Sort: {item.sort_order ?? 0}</span>
-                        </div>
-
-                        {item.description && (
-                          <p className="mt-3 text-sm text-gray-600">{item.description}</p>
-                        )}
-
-                        {item.image_url && (
-                          <p className="mt-2 truncate text-xs text-gray-400">{item.image_url}</p>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleEdit(item)}
-                          className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          ) : null}
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-300 bg-red-100 px-4 py-3 text-red-700">
+            {error}
+          </div>
+        )}
+
+        {message && (
+          <div className="mb-4 rounded-lg border border-green-300 bg-green-100 px-4 py-3 text-green-700">
+            {message}
+          </div>
+        )}
+
+        {loading ? (
+          <div className="rounded-lg bg-white p-6 shadow">Loading menu items...</div>
+        ) : (
+          <div className="overflow-x-auto rounded-xl bg-white shadow">
+            <table className="w-full min-w-[1300px] text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-4 py-3 text-left">ID</th>
+                  <th className="px-4 py-3 text-left">Name</th>
+                  <th className="px-4 py-3 text-left">Price</th>
+                  <th className="px-4 py-3 text-left">Category</th>
+                  <th className="px-4 py-3 text-left">Image URL</th>
+                  <th className="px-4 py-3 text-center">Preview</th>
+                  <th className="px-4 py-3 text-center">Sort Order</th>
+                  <th className="px-4 py-3 text-center">Available</th>
+                  <th className="px-4 py-3 text-center">Save</th>
+                  <th className="px-4 py-3 text-center">Delete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t align-top">
+                    <td className="px-4 py-3">{item.id}</td>
+
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={item.name || ''}
+                        onChange={(e) => handleChange(item.id, 'name', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={item.price ?? ''}
+                        onChange={(e) => handleChange(item.id, 'price', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={item.category || ''}
+                        onChange={(e) => handleChange(item.id, 'category', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={item.image_url || ''}
+                        onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="mx-auto h-14 w-14 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="text-gray-400">No image</span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="number"
+                        value={item.sort_order ?? 0}
+                        onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
+                        className="w-24 rounded-md border border-gray-300 px-3 py-2 text-center"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!item.is_available}
+                        onChange={(e) =>
+                          handleChange(item.id, 'is_available', e.target.checked)
+                        }
+                        className="h-4 w-4"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleSave(item)}
+                        disabled={savingId === item.id}
+                        className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
+                      >
+                        {savingId === item.id ? 'Saving...' : 'Save'}
+                      </button>
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        disabled={deletingId === item.id}
+                        className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-gray-400"
+                      >
+                        {deletingId === item.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
-export default MenuAdminPanel;
