@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient.js';
 
 export default function MenuAdminPanel() {
-  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
@@ -13,7 +12,6 @@ export default function MenuAdminPanel() {
   const [message, setMessage] = useState('');
   const [newItem, setNewItem] = useState({
     name: '',
-    description: '',
     price: '',
     category: '',
     image_url: '',
@@ -28,9 +26,7 @@ export default function MenuAdminPanel() {
 
     const { data, error } = await supabase
       .from('menu_item')
-      .select(
-        'id, name, description, price, category, image_url, is_available, sort_order'
-      )
+      .select('id, name, price, category, image_url, is_available, sort_order')
       .order('sort_order', { ascending: true })
       .order('id', { ascending: true });
 
@@ -79,7 +75,6 @@ export default function MenuAdminPanel() {
     const { error } = await supabase.from('menu_item').insert([
       {
         name: newItem.name.trim(),
-        description: newItem.description.trim(),
         price: Number(newItem.price),
         category: newItem.category.trim(),
         image_url: newItem.image_url.trim(),
@@ -94,7 +89,6 @@ export default function MenuAdminPanel() {
       setMessage('New menu item added.');
       setNewItem({
         name: '',
-        description: '',
         price: '',
         category: '',
         image_url: '',
@@ -116,7 +110,6 @@ export default function MenuAdminPanel() {
       .from('menu_item')
       .update({
         name: item.name,
-        description: item.description || '',
         price: Number(item.price),
         category: item.category,
         image_url: item.image_url,
@@ -158,30 +151,13 @@ export default function MenuAdminPanel() {
     setDeletingId(null);
   };
 
-  const handleSignOut = async () => {
-    const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-
-    navigate('/admin/login', { replace: true });
-  };
-
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-6">
-      <div className="mx-auto max-w-7xl">
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Menu Admin Panel</h1>
 
-          <div className="flex flex-wrap gap-3">
-            <Link
-              to="/"
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Storefront
-            </Link>
+          <div className="flex gap-3">
             <Link
               to="/admin"
               className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
@@ -194,22 +170,16 @@ export default function MenuAdminPanel() {
             >
               Menu
             </Link>
-            <button
-              onClick={handleSignOut}
-              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
-            >
-              Sign Out
-            </button>
           </div>
         </div>
 
         <div className="mb-6 rounded-xl bg-white p-6 shadow">
-          <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="mb-4 flex items-center justify-between gap-4">
             <h2 className="text-xl font-semibold text-gray-800">Add Menu Item</h2>
             <p className="text-sm text-gray-500">Lower sort order shows first.</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
             <input
               type="text"
               placeholder="Name"
@@ -260,13 +230,6 @@ export default function MenuAdminPanel() {
             </button>
           </div>
 
-          <textarea
-            placeholder="Description"
-            value={newItem.description}
-            onChange={(e) => handleNewItemChange('description', e.target.value)}
-            className="mt-4 min-h-[96px] w-full rounded-md border border-gray-300 px-3 py-2"
-          />
-
           <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
@@ -304,229 +267,120 @@ export default function MenuAdminPanel() {
         {loading ? (
           <div className="rounded-lg bg-white p-6 shadow">Loading menu items...</div>
         ) : (
-          <>
-            <div className="hidden overflow-x-auto rounded-xl bg-white shadow lg:block">
-              <table className="w-full min-w-[1400px] text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-4 py-3 text-left">ID</th>
-                    <th className="px-4 py-3 text-left">Name</th>
-                    <th className="px-4 py-3 text-left">Description</th>
-                    <th className="px-4 py-3 text-left">Price</th>
-                    <th className="px-4 py-3 text-left">Category</th>
-                    <th className="px-4 py-3 text-left">Image URL</th>
-                    <th className="px-4 py-3 text-center">Preview</th>
-                    <th className="px-4 py-3 text-center">Sort Order</th>
-                    <th className="px-4 py-3 text-center">Available</th>
-                    <th className="px-4 py-3 text-center">Save</th>
-                    <th className="px-4 py-3 text-center">Delete</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id} className="border-t align-top">
-                      <td className="px-4 py-3">{item.id}</td>
+          <div className="overflow-x-auto rounded-xl bg-white shadow">
+            <table className="w-full min-w-[1300px] text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-4 py-3 text-left">ID</th>
+                  <th className="px-4 py-3 text-left">Name</th>
+                  <th className="px-4 py-3 text-left">Price</th>
+                  <th className="px-4 py-3 text-left">Category</th>
+                  <th className="px-4 py-3 text-left">Image URL</th>
+                  <th className="px-4 py-3 text-center">Preview</th>
+                  <th className="px-4 py-3 text-center">Sort Order</th>
+                  <th className="px-4 py-3 text-center">Available</th>
+                  <th className="px-4 py-3 text-center">Save</th>
+                  <th className="px-4 py-3 text-center">Delete</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t align-top">
+                    <td className="px-4 py-3">{item.id}</td>
 
-                      <td className="px-4 py-3">
-                        <input
-                          type="text"
-                          value={item.name || ''}
-                          onChange={(e) => handleChange(item.id, 'name', e.target.value)}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <textarea
-                          value={item.description || ''}
-                          onChange={(e) => handleChange(item.id, 'description', e.target.value)}
-                          className="min-h-[96px] w-full rounded-md border border-gray-300 px-3 py-2"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={item.price ?? ''}
-                          onChange={(e) => handleChange(item.id, 'price', e.target.value)}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <input
-                          type="text"
-                          value={item.category || ''}
-                          onChange={(e) => handleChange(item.id, 'category', e.target.value)}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <input
-                          type="text"
-                          value={item.image_url || ''}
-                          onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
-                          className="w-full rounded-md border border-gray-300 px-3 py-2"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.name}
-                            className="mx-auto h-14 w-14 rounded-lg object-cover"
-                          />
-                        ) : (
-                          <span className="text-gray-400">No image</span>
-                        )}
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        <input
-                          type="number"
-                          value={item.sort_order ?? 0}
-                          onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
-                          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-center"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        <input
-                          type="checkbox"
-                          checked={!!item.is_available}
-                          onChange={(e) =>
-                            handleChange(item.id, 'is_available', e.target.checked)
-                          }
-                          className="h-4 w-4"
-                        />
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleSave(item)}
-                          disabled={savingId === item.id}
-                          className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
-                        >
-                          {savingId === item.id ? 'Saving...' : 'Save'}
-                        </button>
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          disabled={deletingId === item.id}
-                          className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-gray-400"
-                        >
-                          {deletingId === item.id ? 'Deleting...' : 'Delete'}
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="space-y-4 lg:hidden">
-              {items.map((item) => (
-                <div key={item.id} className="rounded-xl bg-white p-4 shadow">
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                        Item #{item.id}
-                      </p>
-                      <p className="text-sm text-gray-500">Mobile edit view</p>
-                    </div>
-                    {item.image_url ? (
-                      <img
-                        src={item.image_url}
-                        alt={item.name}
-                        className="h-16 w-16 rounded-lg object-cover"
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={item.name || ''}
+                        onChange={(e) => handleChange(item.id, 'name', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
                       />
-                    ) : (
-                      <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
-                        No image
-                      </div>
-                    )}
-                  </div>
+                    </td>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <input
-                      type="text"
-                      value={item.name || ''}
-                      onChange={(e) => handleChange(item.id, 'name', e.target.value)}
-                      className="rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Name"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={item.price ?? ''}
-                      onChange={(e) => handleChange(item.id, 'price', e.target.value)}
-                      className="rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Price"
-                    />
-                    <input
-                      type="text"
-                      value={item.category || ''}
-                      onChange={(e) => handleChange(item.id, 'category', e.target.value)}
-                      className="rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Category"
-                    />
-                    <input
-                      type="number"
-                      value={item.sort_order ?? 0}
-                      onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
-                      className="rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Sort Order"
-                    />
-                    <input
-                      type="text"
-                      value={item.image_url || ''}
-                      onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
-                      className="sm:col-span-2 rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Image URL"
-                    />
-                    <textarea
-                      value={item.description || ''}
-                      onChange={(e) => handleChange(item.id, 'description', e.target.value)}
-                      className="sm:col-span-2 min-h-[96px] rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Description"
-                    />
-                  </div>
+                    <td className="px-4 py-3">
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={item.price ?? ''}
+                        onChange={(e) => handleChange(item.id, 'price', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </td>
 
-                  <label className="mt-4 flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={!!item.is_available}
-                      onChange={(e) => handleChange(item.id, 'is_available', e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Available
-                  </label>
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={item.category || ''}
+                        onChange={(e) => handleChange(item.id, 'category', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </td>
 
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                    <button
-                      onClick={() => handleSave(item)}
-                      disabled={savingId === item.id}
-                      className="w-full rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
-                    >
-                      {savingId === item.id ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      disabled={deletingId === item.id}
-                      className="w-full rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-gray-400"
-                    >
-                      {deletingId === item.id ? 'Deleting...' : 'Delete'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
+                    <td className="px-4 py-3">
+                      <input
+                        type="text"
+                        value={item.image_url || ''}
+                        onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      {item.image_url ? (
+                        <img
+                          src={item.image_url}
+                          alt={item.name}
+                          className="mx-auto h-14 w-14 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="text-gray-400">No image</span>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="number"
+                        value={item.sort_order ?? 0}
+                        onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
+                        className="w-24 rounded-md border border-gray-300 px-3 py-2 text-center"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!item.is_available}
+                        onChange={(e) =>
+                          handleChange(item.id, 'is_available', e.target.checked)
+                        }
+                        className="h-4 w-4"
+                      />
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleSave(item)}
+                        disabled={savingId === item.id}
+                        className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-400"
+                      >
+                        {savingId === item.id ? 'Saving...' : 'Save'}
+                      </button>
+                    </td>
+
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => handleDelete(item.id)}
+                        disabled={deletingId === item.id}
+                        className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-gray-400"
+                      >
+                        {deletingId === item.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
