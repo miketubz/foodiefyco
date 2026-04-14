@@ -736,7 +736,6 @@ export const AdminPanel = () => {
                       <th className="px-4 py-3 text-left">Customer Name</th>
                       <th className="px-4 py-3 text-left">Phone Number</th>
                       <th className="px-4 py-3 text-left">Delivery Address</th>
-                      <th className="px-4 py-3 text-left">Special Instructions</th>
                       <th className="px-4 py-3 text-left">Source</th>
                       <th className="px-4 py-3 text-left">Payment</th>
                       <th className="px-4 py-3 text-left">Payment Status</th>
@@ -766,7 +765,6 @@ export const AdminPanel = () => {
                               <td className="px-4 py-3">{order.customerName}</td>
                               <td className="px-4 py-3">{order.phoneNumber}</td>
                               <td className="px-4 py-3">{order.deliveryAddress}</td>
-                              <td className="px-4 py-3">{order.specialInstructions || 'None'}</td>
                               <td className="px-4 py-3">{order.orderSource || 'internal'}</td>
                               <td className="px-4 py-3">{order.paymentMethod || 'N/A'}</td>
                               <td className="px-4 py-3">
@@ -820,7 +818,7 @@ export const AdminPanel = () => {
                             </tr>
                             {isExpanded && (
                               <tr className="border-b bg-gray-50">
-                                <td colSpan="15" className="px-6 py-4">
+                                <td colSpan="16" className="px-6 py-4">
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
                                       <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
