@@ -157,12 +157,24 @@ export default function MenuAdminPanel() {
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <h1 className="text-3xl font-bold text-gray-900">Menu Admin Panel</h1>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
+            <Link
+              to="/"
+              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
+            >
+              Frontstore
+            </Link>
             <Link
               to="/admin"
               className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
             >
               Orders
+            </Link>
+            <Link
+              to="/admin/external"
+              className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100"
+            >
+              External Orders
             </Link>
             <Link
               to="/admin/menu"
