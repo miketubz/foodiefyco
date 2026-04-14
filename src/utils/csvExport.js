@@ -1,58 +1,58 @@
-export function generateOrdersCSV(orders = []) {
+export const generateOrdersCSV = (orders) => {
+  if (orders.length === 0) return '';
+
   const headers = [
     'Order ID',
-    'Date Ordered',
     'Customer Name',
     'Phone Number',
     'Delivery Address',
-    'Payment Method',
-    'Promo Code',
-    'Discount Amount',
-    'Items',
+    'Special Instructions',
+    'Order Date',
     'Item Count',
+    'Items',
     'Total Amount',
     'Status',
-    'Special Instructions',
   ];
 
-  const escapeValue = (value) => {
+  const escapeCSV = (value) => {
     const stringValue = String(value ?? '');
-    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    if (
+      stringValue.includes(',') ||
+      stringValue.includes('"') ||
+      stringValue.includes('\n')
+    ) {
       return `"${stringValue.replace(/"/g, '""')}"`;
     }
     return stringValue;
   };
 
   const rows = orders.map((order) => [
-    order.orderId,
-    order.orderDate,
-    order.customerName,
-    order.phoneNumber,
-    order.deliveryAddress,
-    order.paymentMethod,
-    order.promoCode || '',
-    Number(order.discountAmount || 0).toFixed(2),
-    order.itemsSummary,
-    order.itemCount,
+    escapeCSV(order.orderId),
+    escapeCSV(order.customerName),
+    escapeCSV(order.phoneNumber),
+    escapeCSV(order.deliveryAddress),
+    escapeCSV(order.specialInstructions),
+    escapeCSV(order.orderDate),
+    escapeCSV(order.itemCount),
+    escapeCSV(order.items),
     Number(order.totalAmount || 0).toFixed(2),
-    order.status,
-    order.specialInstructions || '',
+    escapeCSV(order.status),
   ]);
 
-  return [headers, ...rows]
-    .map((row) => row.map(escapeValue).join(','))
-    .join('\n');
-}
+  return [headers.join(','), ...rows.map((row) => row.join(','))].join('\n');
+};
 
-export function downloadCSV(csvContent, filename) {
+export const downloadCSV = (csvContent, filename = 'orders.csv') => {
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
 
   link.href = url;
-  link.setAttribute('download', filename);
+  link.download = filename;
+  link.style.visibility = 'hidden';
+
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-}
+};
