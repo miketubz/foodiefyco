@@ -1,12 +1,12 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
-import FrontendPage from './pages/FrontendPage';
-import AdminPage from './pages/AdminPage';
-import MenuAdminPanel from './pages/MenuAdminPanel';
-import AdminLoginPage from './pages/AdminLoginPage';
-import AdminExternalPage from './pages/AdminExternalPage';
-import GalleryPage from './pages/GalleryPage';
-import AdminGalleryPage from './pages/AdminGalleryPage';
-import RequireAdmin from './components/RequireAdmin';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AdminPanel } from './components/AdminPanel.jsx';
+import MenuAdminPanel from './components/MenuAdminPanel.jsx';
+import RequireAdmin from './components/RequireAdmin.jsx';
+import AdminLoginPage from './pages/AdminLoginPage.jsx';
+import FrontendPage from './pages/FrontendPage.jsx';
+import GalleryPage from './pages/GalleryPage.jsx';
+import AdminGalleryPage from './pages/AdminGalleryPage.jsx';
+import AdminExternalPage from './pages/AdminExternalPage.jsx';
 
 function App() {
   return (
@@ -19,7 +19,7 @@ function App() {
         path="/admin"
         element={
           <RequireAdmin>
-            <AdminPage />
+            <AdminPanel />
           </RequireAdmin>
         }
       />
@@ -34,19 +34,19 @@ function App() {
       />
 
       <Route
-        path="/admin/external"
+        path="/admin/gallery"
         element={
           <RequireAdmin>
-            <AdminExternalPage />
+            <AdminGalleryPage />
           </RequireAdmin>
         }
       />
 
       <Route
-        path="/admin/gallery"
+        path="/admin/external"
         element={
           <RequireAdmin>
-            <AdminGalleryPage />
+            <AdminExternalPage />
           </RequireAdmin>
         }
       />
