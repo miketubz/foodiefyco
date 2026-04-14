@@ -21,10 +21,6 @@ export const useOrdersExport = () => {
         delivery_address,
         special_instructions,
         payment_method,
-        promo_code,
-        discount_amount,
-        payment_status,
-        payment_proof_url,
         order_source,
         order_items (
           quantity,
@@ -61,32 +57,16 @@ export const useOrdersExport = () => {
           subtotal: Number(item.price || 0) * Number(item.quantity || 0),
         }));
 
-        const normalizedSource = (order.order_source || '').toString().trim().toLowerCase();
-
         return {
           orderId: order.id,
           customerName: order.customer_name || 'N/A',
-          customer_name: order.customer_name || 'N/A',
           phoneNumber: order.phone_number || 'N/A',
-          phone_number: order.phone_number || 'N/A',
           deliveryAddress: order.delivery_address || 'N/A',
-          delivery_address: order.delivery_address || 'N/A',
           specialInstructions: order.special_instructions || '',
-          special_instructions: order.special_instructions || '',
           paymentMethod: order.payment_method || 'COD',
-          payment_method: order.payment_method || 'COD',
-          promoCode: order.promo_code || null,
-          promo_code: order.promo_code || null,
-          discountAmount: Number(order.discount_amount || 0),
-          discount_amount: Number(order.discount_amount || 0),
-          paymentStatus: order.payment_status || 'unpaid',
-          payment_status: order.payment_status || 'unpaid',
-          payment_proof_url: order.payment_proof_url || null,
-          order_source: normalizedSource || 'internal',
+          orderSource: (order.order_source || 'internal').toLowerCase(),
           orderDate: new Date(order.created_at).toLocaleString(),
-          created_at: order.created_at,
           totalAmount: Number(order.total_amount || 0),
-          total_amount: Number(order.total_amount || 0),
           itemCount: orderItems.reduce((sum, item) => sum + item.quantity, 0),
           itemsSummary: orderItems
             .map((item) => `${item.name} x${item.quantity}`)
