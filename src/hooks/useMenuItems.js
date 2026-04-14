@@ -1,39 +1,65 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
 
-export const useMenuItems = () => {
+export function useMenuItems(options = {}) {
+  const { externalView = false } = options;
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchMenuItems = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+      setLoading(true);
+      setError('');
 
-        const { data, error } = await supabase
-          .from('menu_item')
-          .select(
-            'id, name, description, price, category, image_url, is_available, sort_order'
-          )
-          .eq('is_available', true)
-          .order('sort_order', { ascending: true })
-          .order('id', { ascending: true });
+      const { data, error: fetchError } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
 
-        if (error) throw error;
+      if (!isMounted) return;
 
-        setMenuItems(data || []);
-      } catch (err) {
-        console.error('Error fetching menu items:', err);
-        setError(err.message || 'Failed to load menu items');
-      } finally {
+      if (fetchError) {
+        setError(fetchError.message || 'Failed to load menu items.');
+        setMenuItems([]);
         setLoading(false);
+        return;
       }
+
+      const normalizedItems = (data || [])
+        .filter((item) => (externalView ? true : !item.external_only))
+        .map((item) => {
+          const regularPrice = Number(item.price || 0);
+          const sellerPrice = item.seller_price === null || item.seller_price === undefined || item.seller_price === ''
+            ? null
+            : Number(item.seller_price);
+
+          return {
+            ...item,
+            regular_price: regularPrice,
+            seller_price: sellerPrice,
+            price: externalView && sellerPrice !== null ? sellerPrice : regularPrice,
+          };
+        });
+
+      setMenuItems(normalizedItems);
+      setLoading(false);
     };
 
     fetchMenuItems();
-  }, []);
 
-  return { menuItems, loading, error };
-};
+    return () => {
+      isMounted = false;
+    };
+  }, [externalView]);
+
+  return {
+    menuItems,
+    loading,
+    error,
+  };
+}
