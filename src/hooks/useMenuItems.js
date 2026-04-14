@@ -1,65 +1,44 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabaseClient.js';
+import { supabase } from '../supabaseClient';
 
-export function useMenuItems(options = {}) {
-  const { externalView = false } = options;
+export function useMenuItems() {
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    let isMounted = true;
+    let active = true;
 
     const fetchMenuItems = async () => {
       setLoading(true);
       setError('');
 
       const { data, error: fetchError } = await supabase
-        .from('menu_items')
+        .from('menu_item')
         .select('*')
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true })
-        .order('name', { ascending: true });
+        .eq('available', true)
+        .or('external_only.is.null,external_only.eq.false')
+        .order('sort_order', { ascending: true, nullsFirst: true })
+        .order('id', { ascending: true });
 
-      if (!isMounted) return;
+      if (!active) return;
 
       if (fetchError) {
-        setError(fetchError.message || 'Failed to load menu items.');
+        setError(fetchError.message);
         setMenuItems([]);
-        setLoading(false);
-        return;
+      } else {
+        setMenuItems(data || []);
       }
 
-      const normalizedItems = (data || [])
-        .filter((item) => (externalView ? true : !item.external_only))
-        .map((item) => {
-          const regularPrice = Number(item.price || 0);
-          const sellerPrice = item.seller_price === null || item.seller_price === undefined || item.seller_price === ''
-            ? null
-            : Number(item.seller_price);
-
-          return {
-            ...item,
-            regular_price: regularPrice,
-            seller_price: sellerPrice,
-            price: externalView && sellerPrice !== null ? sellerPrice : regularPrice,
-          };
-        });
-
-      setMenuItems(normalizedItems);
       setLoading(false);
     };
 
     fetchMenuItems();
 
     return () => {
-      isMounted = false;
+      active = false;
     };
-  }, [externalView]);
+  }, []);
 
-  return {
-    menuItems,
-    loading,
-    error,
-  };
+  return { menuItems, loading, error };
 }
