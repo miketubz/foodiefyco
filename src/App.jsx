@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import FrontendPage from './pages/FrontendPage';
-import AdminPanel from './pages/AdminPanel';
+import AdminPanel from './pages/AdminPage';
 import MenuAdminPanel from './pages/MenuAdminPanel';
 import AdminLoginPage from './pages/AdminLoginPage';
 import RequireAdmin from './components/RequireAdmin';
