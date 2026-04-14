@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import FrontendPage from './pages/FrontendPage';
-import AdminPanel from './pages/AdminPage';
+import AdminPage from './pages/AdminPage';
 import MenuAdminPanel from './pages/MenuAdminPanel';
 import AdminLoginPage from './pages/AdminLoginPage';
+import GalleryPage from './pages/GalleryPage';
+import AdminGalleryPage from './pages/AdminGalleryPage';
 import RequireAdmin from './components/RequireAdmin';
 import AdminExternalPage from './pages/AdminExternalPage';
 
@@ -11,13 +13,14 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<FrontendPage />} />
+        <Route path="/gallery" element={<GalleryPage />} />
         <Route path="/admin/login" element={<AdminLoginPage />} />
 
         <Route
           path="/admin"
           element={
             <RequireAdmin>
-              <AdminPanel />
+              <AdminPage />
             </RequireAdmin>
           }
         />
@@ -27,6 +30,15 @@ function App() {
           element={
             <RequireAdmin>
               <MenuAdminPanel />
+            </RequireAdmin>
+          }
+        />
+
+        <Route
+          path="/admin/gallery"
+          element={
+            <RequireAdmin>
+              <AdminGalleryPage />
             </RequireAdmin>
           }
         />
