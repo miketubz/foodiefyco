@@ -1,44 +1,37 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../lib/supabaseClient.js';
 
-export function useMenuItems() {
+export const useMenuItems = () => {
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    let active = true;
-
     const fetchMenuItems = async () => {
-      setLoading(true);
-      setError('');
+      try {
+        setLoading(true);
+        setError(null);
 
-      const { data, error: fetchError } = await supabase
-        .from('menu_item')
-        .select('*')
-        .eq('available', true)
-        .or('external_only.is.null,external_only.eq.false')
-        .order('sort_order', { ascending: true, nullsFirst: true })
-        .order('id', { ascending: true });
+        const { data, error } = await supabase
+          .from('menu_item')
+          .select('id, name, price, category, image_url, is_available, sort_order')
+          .eq('is_available', true)
+          .order('sort_order', { ascending: true })
+          .order('id', { ascending: true });
 
-      if (!active) return;
+        if (error) throw error;
 
-      if (fetchError) {
-        setError(fetchError.message);
-        setMenuItems([]);
-      } else {
         setMenuItems(data || []);
+      } catch (err) {
+        console.error('Error fetching menu items:', err);
+        setError(err.message || 'Failed to load menu items');
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchMenuItems();
-
-    return () => {
-      active = false;
-    };
   }, []);
 
   return { menuItems, loading, error };
-}
+};
