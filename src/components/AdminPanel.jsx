@@ -298,14 +298,126 @@ export const AdminPanel = () => {
     navigate('/admin/login', { replace: true });
   };
 
+  const normalizedOrders = useMemo(() => {
+    return (orders || []).map((order) => {
+      const rawItems = Array.isArray(order.orderItems)
+        ? order.orderItems
+        : Array.isArray(order.order_items)
+        ? order.order_items
+        : Array.isArray(order.items)
+        ? order.items
+        : [];
+
+      const orderItems = rawItems.map((item) => {
+        const itemName =
+          item?.name || item?.menu_item?.name || item?.menu_item || 'Item';
+        const quantity = Number(item?.quantity || 0);
+        const price = Number(item?.price || 0);
+        const subtotal = Number(item?.subtotal || quantity * price || 0);
+
+        return {
+          ...item,
+          name: itemName,
+          quantity,
+          price,
+          subtotal,
+        };
+      });
+
+      const createdAt = order.createdAt || order.created_at || '';
+      const parsedDate = createdAt ? new Date(createdAt) : null;
+      const orderDate =
+        order.orderDate ||
+        (parsedDate && !Number.isNaN(parsedDate.getTime())
+          ? parsedDate.toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'numeric',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })
+          : 'N/A');
+
+      const orderSourceRaw = String(
+        order.orderSource ?? order.order_source ?? 'internal'
+      )
+        .trim()
+        .toLowerCase();
+
+      const orderSource =
+        orderSourceRaw === 'external' ? 'external' : 'internal';
+
+      const specialInstructionsRaw =
+        order.specialInstructions ?? order.special_instructions ?? '';
+
+      const specialInstructions =
+        specialInstructionsRaw === null || specialInstructionsRaw === undefined
+          ? ''
+          : String(specialInstructionsRaw).trim();
+
+      const paymentMethodRaw =
+        order.paymentMethod ?? order.payment_method ?? '';
+
+      const paymentStatusRaw =
+        order.paymentStatus ?? order.payment_status ?? 'unpaid';
+
+      const paymentProofOption =
+        order.paymentProofOption ?? order.payment_proof_option ?? '';
+
+      const paymentProofPath =
+        order.paymentProofPath ??
+        order.paymentProofUrl ??
+        order.payment_proof_path ??
+        '';
+
+      const promoCode = order.promoCode ?? order.promo_code ?? '';
+      const discountAmount = Number(order.discountAmount ?? order.discount_amount ?? 0);
+      const totalAmount = Number(order.totalAmount ?? order.total_amount ?? 0);
+      const status = String(order.status || 'pending').toLowerCase();
+      const itemCount = order.itemCount ?? orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      const itemsSummary =
+        order.itemsSummary ||
+        orderItems.map((item) => `${item.quantity}x ${item.name}`).join(', ') ||
+        'No items';
+
+      return {
+        ...order,
+        orderId: order.orderId ?? order.id,
+        orderDate,
+        customerName: order.customerName ?? order.customer_name ?? 'N/A',
+        phoneNumber: order.phoneNumber ?? order.phone_number ?? 'N/A',
+        deliveryAddress: order.deliveryAddress ?? order.delivery_address ?? 'N/A',
+        paymentMethod: paymentMethodRaw || 'N/A',
+        paymentStatus: String(paymentStatusRaw || 'unpaid').toLowerCase(),
+        paymentProofOption,
+        paymentProofPath,
+        paymentProofUrl: paymentProofPath,
+        promoCode: promoCode || '',
+        discountAmount,
+        totalAmount,
+        orderSource,
+        order_source: orderSource,
+        specialInstructions: specialInstructions || 'None',
+        special_instructions: specialInstructions,
+        status,
+        orderItems,
+        itemCount,
+        itemsSummary,
+        createdAt,
+      };
+    });
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    return orders.filter((order) => {
+    return normalizedOrders.filter((order) => {
       const matchesPaymentStatus =
         filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
+      const matchesOrderSource =
+        filters.orderSource === 'all' || (order.orderSource || 'internal') === filters.orderSource;
 
-      if (!matchesPaymentStatus) return false;
+      if (!matchesPaymentStatus || !matchesOrderSource) return false;
       if (!term) return true;
 
       const orderItemText = (order.orderItems || [])
@@ -326,17 +438,18 @@ export const AdminPanel = () => {
         order.paymentProofOption,
         order.itemsSummary,
         order.specialInstructions,
+        order.orderSource,
         order.status,
         orderItemText,
       ].join(' ').toLowerCase();
 
       return haystack.includes(term);
     });
-  }, [orders, searchTerm, filters.paymentStatus]);
+  }, [normalizedOrders, searchTerm, filters.paymentStatus, filters.orderSource]);
 
   const completedCount = useMemo(
-    () => orders.filter((order) => order.status === 'completed').length,
-    [orders]
+    () => normalizedOrders.filter((order) => order.status === 'completed').length,
+    [normalizedOrders]
   );
 
   const rangeSummary = useMemo(() => {
@@ -382,6 +495,11 @@ export const AdminPanel = () => {
     if (paymentStatus === 'paid') return 'bg-green-100 text-green-800';
     if (paymentStatus === 'unpaid') return 'bg-yellow-100 text-yellow-800';
     return 'bg-gray-100 text-gray-700';
+  };
+
+  const getOrderSourceClasses = (orderSource) => {
+    if (orderSource === 'external') return 'bg-violet-100 text-violet-800';
+    return 'bg-sky-100 text-sky-800';
   };
 
   const renderProofText = (order) => {
@@ -442,6 +560,14 @@ export const AdminPanel = () => {
                 <option value="unpaid">Unpaid</option>
               </select>
             </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Order Source</label>
+              <select value={filters.orderSource} onChange={(e) => setFilters({ ...filters, orderSource: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="all">All</option>
+                <option value="internal">Internal</option>
+                <option value="external">External</option>
+              </select>
+            </div>
             <div className="flex items-end">
               <button onClick={handleFetchOrders} disabled={loading} className="w-full rounded-md bg-blue-600 px-4 py-2 text-white transition hover:bg-blue-700 disabled:bg-gray-400">
                 {loading ? 'Loading...' : 'Fetch Orders'}
@@ -478,7 +604,7 @@ export const AdminPanel = () => {
               <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-800">Orders ({filteredOrders.length})</h2>
-                  {searchTerm && <p className="mt-1 text-sm text-gray-500">Showing {filteredOrders.length} of {orders.length} orders</p>}
+                  {searchTerm && <p className="mt-1 text-sm text-gray-500">Showing {filteredOrders.length} of {normalizedOrders.length} orders</p>}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
@@ -518,6 +644,8 @@ export const AdminPanel = () => {
                         <div className="mb-3 grid grid-cols-1 gap-2 text-sm text-gray-700">
                           <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                           <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
+                          <p><span className="font-semibold">Source:</span> {(order.orderSource || 'internal').toUpperCase()}</p>
+                          <p><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
                           <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
                           <p><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
                           <p><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
@@ -538,6 +666,7 @@ export const AdminPanel = () => {
                         <div className="mb-3 flex flex-wrap gap-2">
                           <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
                           <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getOrderSourceClasses(order.orderSource)}`}>{order.orderSource || 'internal'}</span>
                         </div>
 
                         <div className="mb-3 grid grid-cols-1 gap-3">
@@ -626,8 +755,10 @@ export const AdminPanel = () => {
                       <th className="px-4 py-3 text-left">Phone Number</th>
                       <th className="px-4 py-3 text-left">Delivery Address</th>
                       <th className="px-4 py-3 text-left">Payment</th>
+                      <th className="px-4 py-3 text-left">Source</th>
                       <th className="px-4 py-3 text-left">Payment Status</th>
                       <th className="px-4 py-3 text-left">Proof</th>
+                      <th className="px-4 py-3 text-left">Special Instructions</th>
                       <th className="px-4 py-3 text-left">Promo Code</th>
                       <th className="px-4 py-3 text-right">Discount</th>
                       <th className="px-4 py-3 text-left">Items</th>
@@ -639,7 +770,7 @@ export const AdminPanel = () => {
                   </thead>
                   <tbody>
                     {filteredOrders.length === 0 ? (
-                      <tr><td colSpan="14" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
+                      <tr><td colSpan="16" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
                     ) : (
                       filteredOrders.map((order) => {
                         const isExpanded = expandedOrderId === order.orderId;
@@ -653,6 +784,11 @@ export const AdminPanel = () => {
                               <td className="px-4 py-3">{order.phoneNumber}</td>
                               <td className="px-4 py-3">{order.deliveryAddress}</td>
                               <td className="px-4 py-3">{order.paymentMethod || 'N/A'}</td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getOrderSourceClasses(order.orderSource)}`}>
+                                  {order.orderSource || 'internal'}
+                                </span>
+                              </td>
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
                                   <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
@@ -676,6 +812,9 @@ export const AdminPanel = () => {
                                     </a>
                                   )}
                                 </div>
+                              </td>
+                              <td className="px-4 py-3 max-w-[220px]">
+                                <p className="whitespace-pre-wrap break-words text-sm text-gray-700">{order.specialInstructions || 'None'}</p>
                               </td>
                               <td className="px-4 py-3">{order.promoCode || 'None'}</td>
                               <td className="px-4 py-3 text-right">-₱{Number(order.discountAmount || 0).toFixed(2)}</td>
@@ -704,7 +843,7 @@ export const AdminPanel = () => {
                             </tr>
                             {isExpanded && (
                               <tr className="border-b bg-gray-50">
-                                <td colSpan="14" className="px-6 py-4">
+                                <td colSpan="16" className="px-6 py-4">
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
                                       <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
@@ -714,6 +853,7 @@ export const AdminPanel = () => {
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Source:</span> {(order.orderSource || 'internal').toUpperCase()}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Status:</span> {order.paymentStatus}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
                                       {order.paymentProofUrl && (
