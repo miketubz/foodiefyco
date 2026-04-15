@@ -13,7 +13,6 @@ export const AdminPanel = () => {
     endDate: '',
     status: 'all',
     paymentStatus: 'all',
-    orderSource: 'all',
   });
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -67,10 +66,6 @@ export const AdminPanel = () => {
       startDate: nextFilters.startDate || undefined,
       endDate: nextFilters.endDate || undefined,
       status: nextFilters.status === 'all' ? undefined : nextFilters.status,
-      paymentStatus:
-        nextFilters.paymentStatus === 'all' ? undefined : nextFilters.paymentStatus,
-      orderSource:
-        nextFilters.orderSource === 'all' ? undefined : nextFilters.orderSource,
     });
 
     await fetchTodaySummary();
@@ -303,10 +298,120 @@ export const AdminPanel = () => {
     navigate('/admin/login', { replace: true });
   };
 
+  const normalizedOrders = useMemo(() => {
+    return (orders || []).map((order) => {
+      const rawItems = Array.isArray(order.orderItems)
+        ? order.orderItems
+        : Array.isArray(order.order_items)
+        ? order.order_items
+        : Array.isArray(order.items)
+        ? order.items
+        : [];
+
+      const orderItems = rawItems.map((item) => {
+        const itemName =
+          item?.name || item?.menu_item?.name || item?.menu_item || 'Item';
+        const quantity = Number(item?.quantity || 0);
+        const price = Number(item?.price || 0);
+        const subtotal = Number(item?.subtotal || quantity * price || 0);
+
+        return {
+          ...item,
+          name: itemName,
+          quantity,
+          price,
+          subtotal,
+        };
+      });
+
+      const createdAt = order.createdAt || order.created_at || '';
+      const parsedDate = createdAt ? new Date(createdAt) : null;
+      const orderDate =
+        order.orderDate ||
+        (parsedDate && !Number.isNaN(parsedDate.getTime())
+          ? parsedDate.toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'numeric',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+            })
+          : 'N/A');
+
+      const orderSourceRaw = String(
+        order.orderSource ?? order.order_source ?? 'internal'
+      )
+        .trim()
+        .toLowerCase();
+
+      const orderSource =
+        orderSourceRaw === 'external' ? 'external' : 'internal';
+
+      const specialInstructionsRaw =
+        order.specialInstructions ?? order.special_instructions ?? '';
+
+      const specialInstructions =
+        specialInstructionsRaw === null || specialInstructionsRaw === undefined
+          ? ''
+          : String(specialInstructionsRaw).trim();
+
+      const paymentMethodRaw =
+        order.paymentMethod ?? order.payment_method ?? '';
+
+      const paymentStatusRaw =
+        order.paymentStatus ?? order.payment_status ?? 'unpaid';
+
+      const paymentProofOption =
+        order.paymentProofOption ?? order.payment_proof_option ?? '';
+
+      const paymentProofPath =
+        order.paymentProofPath ??
+        order.paymentProofUrl ??
+        order.payment_proof_path ??
+        '';
+
+      const promoCode = order.promoCode ?? order.promo_code ?? '';
+      const discountAmount = Number(order.discountAmount ?? order.discount_amount ?? 0);
+      const totalAmount = Number(order.totalAmount ?? order.total_amount ?? 0);
+      const status = String(order.status || 'pending').toLowerCase();
+      const itemCount = order.itemCount ?? orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      const itemsSummary =
+        order.itemsSummary ||
+        orderItems.map((item) => `${item.quantity}x ${item.name}`).join(', ') ||
+        'No items';
+
+      return {
+        ...order,
+        orderId: order.orderId ?? order.id,
+        orderDate,
+        customerName: order.customerName ?? order.customer_name ?? 'N/A',
+        phoneNumber: order.phoneNumber ?? order.phone_number ?? 'N/A',
+        deliveryAddress: order.deliveryAddress ?? order.delivery_address ?? 'N/A',
+        paymentMethod: paymentMethodRaw || 'N/A',
+        paymentStatus: String(paymentStatusRaw || 'unpaid').toLowerCase(),
+        paymentProofOption,
+        paymentProofPath,
+        paymentProofUrl: paymentProofPath,
+        promoCode: promoCode || '',
+        discountAmount,
+        totalAmount,
+        orderSource,
+        order_source: orderSource,
+        specialInstructions: specialInstructions || 'None',
+        special_instructions: specialInstructions,
+        status,
+        orderItems,
+        itemCount,
+        itemsSummary,
+        createdAt,
+      };
+    });
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
 
-    return orders.filter((order) => {
+    return normalizedOrders.filter((order) => {
       const matchesPaymentStatus =
         filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
       const matchesOrderSource =
@@ -340,11 +445,11 @@ export const AdminPanel = () => {
 
       return haystack.includes(term);
     });
-  }, [orders, searchTerm, filters.paymentStatus, filters.orderSource]);
+  }, [normalizedOrders, searchTerm, filters.paymentStatus, filters.orderSource]);
 
   const completedCount = useMemo(
-    () => orders.filter((order) => order.status === 'completed').length,
-    [orders]
+    () => normalizedOrders.filter((order) => order.status === 'completed').length,
+    [normalizedOrders]
   );
 
   const rangeSummary = useMemo(() => {
@@ -499,7 +604,7 @@ export const AdminPanel = () => {
               <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-800">Orders ({filteredOrders.length})</h2>
-                  {searchTerm && <p className="mt-1 text-sm text-gray-500">Showing {filteredOrders.length} of {orders.length} orders</p>}
+                  {searchTerm && <p className="mt-1 text-sm text-gray-500">Showing {filteredOrders.length} of {normalizedOrders.length} orders</p>}
                 </div>
 
                 <div className="flex flex-wrap gap-3">
