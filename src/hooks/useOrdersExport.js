@@ -14,6 +14,20 @@ const normalizeText = (value, fallback = 'N/A') => {
   return text ? text : fallback;
 };
 
+const formatOrderDateTime = (value) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
 const getUtcBoundsForLocalDateRange = (startDate, endDate) => {
   const bounds = {};
 
@@ -35,20 +49,6 @@ const getUtcBoundsForLocalDateRange = (startDate, endDate) => {
   return bounds;
 };
 
-const formatOrderDateTime = (value) => {
-  if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-};
-
 export function useOrdersExport() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -60,36 +60,26 @@ export function useOrdersExport() {
       setError('');
 
       try {
-        let query = supabase
+        let ordersQuery = supabase
           .from('orders')
-          .select(
-            `
-              id,
-              customer_name,
-              phone_number,
-              delivery_address,
-              special_instructions,
-              total_amount,
-              status,
-              created_at,
-              updated_at,
-              payment_method,
-              payment_status,
-              payment_proof_option,
-              payment_proof_path,
-              promo_code,
-              discount_amount,
-              order_source,
-              order_items (
-                id,
-                quantity,
-                price,
-                menu_item:menu_item_id (
-                  name
-                )
-              )
-            `
-          )
+          .select(`
+            id,
+            customer_name,
+            phone_number,
+            delivery_address,
+            special_instructions,
+            total_amount,
+            status,
+            created_at,
+            updated_at,
+            payment_method,
+            payment_status,
+            payment_proof_option,
+            payment_proof_path,
+            promo_code,
+            discount_amount,
+            order_source
+          `)
           .order('created_at', { ascending: false });
 
         const { startIso, endIsoExclusive } = getUtcBoundsForLocalDateRange(
@@ -98,62 +88,107 @@ export function useOrdersExport() {
         );
 
         if (startIso) {
-          query = query.gte('created_at', startIso);
+          ordersQuery = ordersQuery.gte('created_at', startIso);
         }
 
         if (endIsoExclusive) {
-          query = query.lt('created_at', endIsoExclusive);
+          ordersQuery = ordersQuery.lt('created_at', endIsoExclusive);
         }
 
         if (status && status !== 'all') {
-          query = query.eq('status', status);
+          ordersQuery = ordersQuery.eq('status', status);
         }
 
         if (paymentStatus && paymentStatus !== 'all') {
-          query = query.eq('payment_status', paymentStatus);
+          ordersQuery = ordersQuery.eq('payment_status', paymentStatus);
         }
 
         if (orderSource && orderSource !== 'all') {
           const normalizedSource = normalizeSourceValue(orderSource);
           if (normalizedSource === 'external') {
-            query = query.eq('order_source', 'external');
+            ordersQuery = ordersQuery.eq('order_source', 'external');
           } else {
-            query = query.or(
+            ordersQuery = ordersQuery.or(
               'order_source.is.null,order_source.eq.internal,order_source.eq.website'
             );
           }
         }
 
-        const { data, error: fetchError } = await query;
+        const { data: ordersData, error: ordersError } = await ordersQuery;
 
-        if (fetchError) {
-          throw fetchError;
+        if (ordersError) throw ordersError;
+
+        const orderRows = ordersData || [];
+        const orderIds = orderRows.map((row) => row.id);
+
+        let orderItemsRows = [];
+        if (orderIds.length > 0) {
+          const { data: itemsData, error: itemsError } = await supabase
+            .from('order_items')
+            .select(`
+              id,
+              order_id,
+              menu_item_id,
+              quantity,
+              price
+            `)
+            .in('order_id', orderIds);
+
+          if (itemsError) throw itemsError;
+          orderItemsRows = itemsData || [];
         }
 
-        const normalizedOrders = (data || []).map((order) => {
-          const orderItems = (order.order_items || []).map((item) => {
-            const itemName = normalizeText(item?.menu_item?.name, 'Item');
-            const quantity = Number(item?.quantity || 0);
-            const price = Number(item?.price || 0);
-            const subtotal = quantity * price;
+        const menuItemIds = [
+          ...new Set(
+            orderItemsRows
+              .map((item) => item.menu_item_id)
+              .filter((value) => value !== null && value !== undefined)
+          ),
+        ];
 
-            return {
-              id: item?.id,
-              name: itemName,
-              quantity,
-              price,
-              subtotal,
-            };
+        let menuItemsMap = new Map();
+        if (menuItemIds.length > 0) {
+          const { data: menuItemsData, error: menuItemsError } = await supabase
+            .from('menu_item')
+            .select('id, name')
+            .in('id', menuItemIds);
+
+          if (menuItemsError) throw menuItemsError;
+
+          menuItemsMap = new Map(
+            (menuItemsData || []).map((item) => [String(item.id), item.name])
+          );
+        }
+
+        const itemsByOrderId = orderItemsRows.reduce((acc, item) => {
+          const orderId = item.order_id;
+          const menuName = menuItemsMap.get(String(item.menu_item_id)) || 'Item';
+          const quantity = Number(item.quantity || 0);
+          const price = Number(item.price || 0);
+          const subtotal = quantity * price;
+
+          if (!acc[orderId]) acc[orderId] = [];
+          acc[orderId].push({
+            id: item.id,
+            menu_item_id: item.menu_item_id,
+            name: menuName,
+            quantity,
+            price,
+            subtotal,
           });
 
-          const itemsSummary =
-            orderItems.map((item) => `${item.quantity}x ${item.name}`).join(', ') ||
-            'No items';
+          return acc;
+        }, {});
 
+        const normalizedOrders = orderRows.map((order) => {
+          const orderItems = itemsByOrderId[order.id] || [];
           const itemCount = orderItems.reduce(
             (sum, item) => sum + Number(item.quantity || 0),
             0
           );
+          const itemsSummary =
+            orderItems.map((item) => `${item.quantity}x ${item.name}`).join(', ') ||
+            'No items';
 
           return {
             id: order.id,
@@ -182,16 +217,22 @@ export function useOrdersExport() {
             orderSource: normalizeSourceValue(order.order_source),
 
             orderItems,
-            itemsSummary,
             itemCount,
+            itemsSummary,
 
-            // keep raw-compatible fields too
-            special_instructions: order.special_instructions || '',
-            payment_method: order.payment_method || '',
-            payment_status: order.payment_status || '',
-            payment_proof_option: order.payment_proof_option || '',
-            payment_proof_path: order.payment_proof_path || '',
-            promo_code: order.promo_code || '',
+            // keep raw-shaped fields too
+            customer_name: order.customer_name,
+            phone_number: order.phone_number,
+            delivery_address: order.delivery_address,
+            special_instructions: order.special_instructions,
+            total_amount: Number(order.total_amount || 0),
+            created_at: order.created_at,
+            updated_at: order.updated_at,
+            payment_method: order.payment_method,
+            payment_status: order.payment_status,
+            payment_proof_option: order.payment_proof_option,
+            payment_proof_path: order.payment_proof_path,
+            promo_code: order.promo_code,
             discount_amount: Number(order.discount_amount || 0),
             order_source: normalizeSourceValue(order.order_source),
             order_items: orderItems,
