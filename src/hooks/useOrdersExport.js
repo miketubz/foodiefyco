@@ -14,41 +14,6 @@ const normalizeText = (value, fallback = 'N/A') => {
   return text ? text : fallback;
 };
 
-const getUtcBoundsForLocalDateRange = (startDate, endDate) => {
-  const bounds = {};
-
-  if (startDate) {
-    const start = new Date(`${startDate}T00:00:00`);
-    if (!Number.isNaN(start.getTime())) {
-      bounds.startIso = start.toISOString();
-    }
-  }
-
-  if (endDate) {
-    const endExclusive = new Date(`${endDate}T00:00:00`);
-    if (!Number.isNaN(endExclusive.getTime())) {
-      endExclusive.setDate(endExclusive.getDate() + 1);
-      bounds.endIsoExclusive = endExclusive.toISOString();
-    }
-  }
-
-  return bounds;
-};
-
-const formatOrderDateTime = (value) => {
-  if (!value) return 'N/A';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-};
-
 export function useOrdersExport() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -84,22 +49,18 @@ export function useOrdersExport() {
                 id,
                 quantity,
                 price,
-                menu_item:menu_item_id (
-                  name
-                )
+                menu_item:name
               )
             `
           )
           .order('created_at', { ascending: false });
 
-        const { startIso, endIsoExclusive } = getUtcBoundsForLocalDateRange(startDate, endDate);
-
-        if (startIso) {
-          query = query.gte('created_at', startIso);
+        if (startDate) {
+          query = query.gte('created_at', `${startDate}T00:00:00`);
         }
 
-        if (endIsoExclusive) {
-          query = query.lt('created_at', endIsoExclusive);
+        if (endDate) {
+          query = query.lte('created_at', `${endDate}T23:59:59.999`);
         }
 
         if (status && status !== 'all') {
@@ -126,62 +87,31 @@ export function useOrdersExport() {
         }
 
         const normalizedOrders = (data || []).map((order) => {
-          const orderItems = (order.order_items || []).map((item) => {
-            const itemName = normalizeText(item?.menu_item?.name || item?.menu_item, 'Item');
-            const quantity = Number(item?.quantity || 0);
-            const price = Number(item?.price || 0);
-            const subtotal = quantity * price;
-
-            return {
-              id: item?.id,
-              name: itemName,
-              quantity,
-              price,
-              subtotal,
-            };
-          });
-
-          const specialInstructions =
-            order.special_instructions === null || order.special_instructions === undefined
-              ? ''
-              : String(order.special_instructions).trim();
-
-          const paymentMethod = normalizeText(order.payment_method);
-          const orderSourceNormalized = normalizeSourceValue(order.order_source);
-          const paymentProofPath = order.payment_proof_path || '';
-          const paymentProofOption = order.payment_proof_option || '';
-          const itemsSummary = orderItems
-            .map((item) => `${item.quantity}x ${item.name}`)
-            .join(', ');
+          const items = (order.order_items || []).map((item) => ({
+            name: normalizeText(item.menu_item, 'Item'),
+            quantity: Number(item.quantity || 0),
+            price: Number(item.price || 0),
+          }));
 
           return {
             id: order.id,
-            orderId: order.id,
             customerName: normalizeText(order.customer_name),
             phoneNumber: normalizeText(order.phone_number),
             deliveryAddress: normalizeText(order.delivery_address),
-            specialInstructions: specialInstructions || 'N/A',
-            special_instructions: specialInstructions,
+            specialInstructions: normalizeText(order.special_instructions),
             totalAmount: Number(order.total_amount || 0),
             status: normalizeText(order.status, 'pending').toLowerCase(),
             createdAt: order.created_at,
             updatedAt: order.updated_at,
-            orderDate: formatOrderDateTime(order.created_at),
-            paymentMethod,
+            paymentMethod: normalizeText(order.payment_method),
             paymentStatus: normalizeText(order.payment_status, 'unpaid').toLowerCase(),
-            paymentProofOption,
-            payment_proof_option: paymentProofOption,
-            paymentProofPath,
-            payment_proof_path: paymentProofPath,
-            paymentProofUrl: paymentProofPath,
+            paymentProofOption: order.payment_proof_option || '',
+            paymentProofPath: order.payment_proof_path || '',
+            paymentProofUrl: order.payment_proof_path || '',
             promoCode: order.promo_code || '',
             discountAmount: Number(order.discount_amount || 0),
-            orderSource: orderSourceNormalized,
-            order_source: orderSourceNormalized,
-            orderItems,
-            items: orderItems,
-            itemCount: orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
-            itemsSummary: itemsSummary || 'No items',
+            orderSource: normalizeSourceValue(order.order_source),
+            items,
           };
         });
 
