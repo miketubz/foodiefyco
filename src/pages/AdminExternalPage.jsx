@@ -3,6 +3,14 @@ import { Link } from 'react-router-dom';
 import { useMenuItems } from '../hooks/useMenuItems';
 import { supabase } from '../lib/supabaseClient.js';
 
+
+const PAYMENT_QR_CANDIDATES = {
+  GCASH: ['/pix/gcash.png', '/pix/gcash.jpg', '/pix/gcash.jpeg', '/pix/GCASH.png', '/pix/GCASH.jpg'],
+  GOtyme: ['/pix/gotyme.png', '/pix/gotyme.jpg', '/pix/gotyme.jpeg', '/pix/GOtyme.png', '/pix/GOtyme.jpg'],
+  UnionBank: ['/pix/unionbank.png', '/pix/unionbank.jpg', '/pix/unionbank.jpeg', '/pix/UnionBank.png', '/pix/UnionBank.jpg'],
+};
+
+
 function AdminExternalPage() {
   const { menuItems, loading, error } = useMenuItems();
 
@@ -24,6 +32,7 @@ function AdminExternalPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [paymentQrIndex, setPaymentQrIndex] = useState(0);
 
   const subtotal = useMemo(
     () =>
@@ -50,6 +59,17 @@ function AdminExternalPage() {
 
     return uniqueCategories.sort((a, b) => a.localeCompare(b));
   }, [menuItems]);
+
+
+  const paymentQrCandidates = useMemo(() => {
+    return PAYMENT_QR_CANDIDATES[paymentMethod] || [];
+  }, [paymentMethod]);
+
+  const activePaymentQr = paymentQrCandidates[paymentQrIndex] || '';
+
+  useEffect(() => {
+    setPaymentQrIndex(0);
+  }, [paymentMethod]);
 
   const filteredMenuItems = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -487,7 +507,7 @@ function AdminExternalPage() {
                         <button
                           key={method}
                           type="button"
-                          onClick={() => setPaymentMethod(method)}
+                          onClick={() => { setPaymentMethod(method); setPaymentQrIndex(0); }}
                           disabled={isSubmitting}
                           className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
                             isSelected
@@ -501,6 +521,37 @@ function AdminExternalPage() {
                     })}
                   </div>
                 </div>
+
+
+                {paymentMethod !== 'COD' && (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">
+                      Payment QR
+                    </label>
+                    <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                      {activePaymentQr ? (
+                        <img
+                          src={activePaymentQr}
+                          alt={`${paymentMethod} QR code`}
+                          className="mx-auto max-h-72 w-auto rounded-xl border border-orange-200 bg-white object-contain p-2"
+                          onError={() => {
+                            setPaymentQrIndex((current) => {
+                              const next = current + 1;
+                              return next < paymentQrCandidates.length ? next : current;
+                            });
+                          }}
+                        />
+                      ) : (
+                        <div className="rounded-xl border border-dashed border-orange-300 bg-white px-4 py-8 text-center text-sm text-gray-500">
+                          QR image not found for {paymentMethod}. Add the same QR image path used by your frontstore page.
+                        </div>
+                      )}
+                      <p className="mt-3 text-center text-sm text-gray-600">
+                        Selected payment method: <span className="font-semibold">{paymentMethod}</span>
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">
