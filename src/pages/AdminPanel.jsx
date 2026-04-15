@@ -13,21 +13,14 @@ export const AdminPanel = () => {
     endDate: '',
     status: 'all',
     paymentStatus: 'all',
-    source: 'all',
   });
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [actionError, setActionError] = useState('');
   const [clearingCompleted, setClearingCompleted] = useState(false);
-  const [clearingCancelled, setClearingCancelled] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [todaySummary, setTodaySummary] = useState({
-    orders: 0,
-    sales: 0,
-    externalOrders: 0,
-    externalSales: 0,
-  });
+  const [todaySummary, setTodaySummary] = useState({ orders: 0, sales: 0 });
 
   const formatDateInput = (date) => {
     const year = date.getFullYear();
@@ -47,27 +40,18 @@ export const AdminPanel = () => {
     const { start, end } = getTodayBounds();
     const { data, error: summaryError } = await supabase
       .from('orders')
-      .select('id, total_amount, status, order_source')
+      .select('id, total_amount, status')
       .gte('created_at', start)
       .lte('created_at', end);
 
     if (summaryError) return;
 
     const todayOrders = data || [];
-    const nonCancelled = todayOrders.filter((order) => order.status !== 'cancelled');
-    const externalToday = nonCancelled.filter(
-      (order) => (order.order_source || 'internal') === 'external'
-    );
+    const todaySales = todayOrders
+      .filter((order) => order.status !== 'cancelled')
+      .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
 
-    setTodaySummary({
-      orders: todayOrders.length,
-      sales: nonCancelled.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-      externalOrders: externalToday.length,
-      externalSales: externalToday.reduce(
-        (sum, order) => sum + Number(order.total_amount || 0),
-        0
-      ),
-    });
+    setTodaySummary({ orders: todayOrders.length, sales: todaySales });
   };
 
   useEffect(() => {
@@ -82,6 +66,9 @@ export const AdminPanel = () => {
       startDate: nextFilters.startDate || undefined,
       endDate: nextFilters.endDate || undefined,
       status: nextFilters.status === 'all' ? undefined : nextFilters.status,
+      paymentStatus:
+        nextFilters.paymentStatus === 'all' ? undefined : nextFilters.paymentStatus,
+      orderSource: nextFilters.source === 'all' ? undefined : nextFilters.source,
     });
 
     await fetchTodaySummary();
@@ -179,22 +166,6 @@ export const AdminPanel = () => {
     setSuccessMessage(`Payment status updated to ${newPaymentStatus}.`);
   };
 
-  const removeProofFiles = async (targetOrders) => {
-    const proofPaths = targetOrders.map((order) => order.paymentProofPath).filter(Boolean);
-
-    if (proofPaths.length === 0) return { ok: true };
-
-    const { error: storageError } = await supabase.storage
-      .from('payment-proofs')
-      .remove(proofPaths);
-
-    if (storageError) {
-      return { ok: false, message: storageError.message };
-    }
-
-    return { ok: true };
-  };
-
   const handleClearCompletedOrders = async () => {
     const completedOrders = orders.filter((order) => order.status === 'completed');
     if (completedOrders.length === 0) {
@@ -202,20 +173,27 @@ export const AdminPanel = () => {
       return;
     }
 
-    const confirmed = window.confirm(
-      'Clear all completed orders? This also removes uploaded proof files.'
-    );
+    const confirmed = window.confirm('Clear all completed orders? This also removes uploaded proof files.');
     if (!confirmed) return;
 
     setClearingCompleted(true);
     setActionError('');
     setSuccessMessage('');
 
-    const proofResult = await removeProofFiles(completedOrders);
-    if (!proofResult.ok) {
-      setActionError(`Could not delete proof images: ${proofResult.message}`);
-      setClearingCompleted(false);
-      return;
+    const proofPaths = completedOrders
+      .map((order) => order.paymentProofPath)
+      .filter(Boolean);
+
+    if (proofPaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from('payment-proofs')
+        .remove(proofPaths);
+
+      if (storageError) {
+        setActionError(`Could not delete proof images: ${storageError.message}`);
+        setClearingCompleted(false);
+        return;
+      }
     }
 
     const ids = completedOrders.map((order) => order.orderId);
@@ -233,44 +211,6 @@ export const AdminPanel = () => {
     setSuccessMessage('Completed orders and uploaded proof files cleared.');
   };
 
-  const handleClearCancelledOrders = async () => {
-    const cancelledOrders = orders.filter((order) => order.status === 'cancelled');
-    if (cancelledOrders.length === 0) {
-      alert('No cancelled orders to clear.');
-      return;
-    }
-
-    const confirmed = window.confirm(
-      'Clear all cancelled orders? This also removes uploaded proof files.'
-    );
-    if (!confirmed) return;
-
-    setClearingCancelled(true);
-    setActionError('');
-    setSuccessMessage('');
-
-    const proofResult = await removeProofFiles(cancelledOrders);
-    if (!proofResult.ok) {
-      setActionError(`Could not delete proof images: ${proofResult.message}`);
-      setClearingCancelled(false);
-      return;
-    }
-
-    const ids = cancelledOrders.map((order) => order.orderId);
-    const { error: deleteError } = await supabase.from('orders').delete().in('id', ids);
-
-    if (deleteError) {
-      setActionError(deleteError.message);
-      setClearingCancelled(false);
-      return;
-    }
-
-    await handleFetchOrders();
-    setClearingCancelled(false);
-    setExpandedOrderId(null);
-    setSuccessMessage('Cancelled orders and uploaded proof files cleared.');
-  };
-
   const handlePrintReceipt = (order) => {
     const receiptWindow = window.open('', '_blank', 'width=800,height=900');
     if (!receiptWindow) {
@@ -278,8 +218,7 @@ export const AdminPanel = () => {
       return;
     }
 
-    const subtotalBeforeDiscount =
-      Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+    const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
     const proofLabel =
       order.paymentMethod === 'COD'
         ? 'Not required'
@@ -318,7 +257,6 @@ export const AdminPanel = () => {
               <p><strong>Customer:</strong> ${order.customerName}</p>
               <p><strong>Phone:</strong> ${order.phoneNumber}</p>
               <p><strong>Address:</strong> ${order.deliveryAddress}</p>
-              <p><strong>Order Source:</strong> ${order.orderSource || 'internal'}</p>
               <p><strong>Payment Method:</strong> ${order.paymentMethod || 'Not specified'}</p>
               <p><strong>Payment Status:</strong> ${order.paymentStatus || 'unpaid'}</p>
               <p><strong>Proof Option:</strong> ${proofLabel}</p>
@@ -369,10 +307,10 @@ export const AdminPanel = () => {
     return orders.filter((order) => {
       const matchesPaymentStatus =
         filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
-      const matchesSource =
-        filters.source === 'all' || (order.orderSource || 'internal') === filters.source;
+      const matchesOrderSource =
+        filters.orderSource === 'all' || (order.orderSource || 'internal') === filters.orderSource;
 
-      if (!matchesPaymentStatus || !matchesSource) return false;
+      if (!matchesPaymentStatus || !matchesOrderSource) return false;
       if (!term) return true;
 
       const orderItemText = (order.orderItems || [])
@@ -388,41 +326,28 @@ export const AdminPanel = () => {
         order.deliveryAddress,
         order.paymentMethod,
         order.paymentStatus,
-        order.orderSource,
         order.promoCode,
         order.discountAmount,
         order.paymentProofOption,
         order.itemsSummary,
         order.specialInstructions,
+        order.orderSource,
         order.status,
         orderItemText,
-      ]
-        .join(' ')
-        .toLowerCase();
+      ].join(' ').toLowerCase();
 
       return haystack.includes(term);
     });
-  }, [orders, searchTerm, filters.paymentStatus, filters.source]);
+  }, [orders, searchTerm, filters.paymentStatus, filters.orderSource]);
 
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
     [orders]
   );
 
-  const cancelledCount = useMemo(
-    () => orders.filter((order) => order.status === 'cancelled').length,
-    [orders]
-  );
-
   const rangeSummary = useMemo(() => {
     const nonCancelledOrders = filteredOrders.filter((order) => order.status !== 'cancelled');
-    const totalSales = nonCancelledOrders.reduce(
-      (sum, order) => sum + Number(order.totalAmount || 0),
-      0
-    );
-    const externalOrders = nonCancelledOrders.filter(
-      (order) => (order.orderSource || 'internal') === 'external'
-    );
+    const totalSales = nonCancelledOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
 
     const byMethod = nonCancelledOrders.reduce((acc, order) => {
       const method = order.paymentMethod || 'Unknown';
@@ -433,11 +358,6 @@ export const AdminPanel = () => {
     return {
       orders: filteredOrders.length,
       sales: totalSales,
-      externalOrders: externalOrders.length,
-      externalSales: externalOrders.reduce(
-        (sum, order) => sum + Number(order.totalAmount || 0),
-        0
-      ),
       cod: byMethod.COD || 0,
       gcash: byMethod.GCASH || 0,
       gotyme: byMethod.GOtyme || 0,
@@ -450,18 +370,12 @@ export const AdminPanel = () => {
       filters.paymentStatus === 'all'
         ? ''
         : ` • ${filters.paymentStatus === 'paid' ? 'Paid Only' : 'Unpaid Only'}`;
-    const sourcePart =
-      filters.source === 'all'
-        ? ''
-        : ` • ${filters.source === 'external' ? 'External Only' : 'Internal Only'}`;
 
-    if (filters.startDate && filters.endDate) {
-      return `${filters.startDate} to ${filters.endDate}${paymentPart}${sourcePart}`;
-    }
-    if (filters.startDate) return `From ${filters.startDate}${paymentPart}${sourcePart}`;
-    if (filters.endDate) return `Until ${filters.endDate}${paymentPart}${sourcePart}`;
-    return `Current View${paymentPart}${sourcePart}`;
-  }, [filters.endDate, filters.startDate, filters.paymentStatus, filters.source]);
+    if (filters.startDate && filters.endDate) return `${filters.startDate} to ${filters.endDate}${paymentPart}`;
+    if (filters.startDate) return `From ${filters.startDate}${paymentPart}`;
+    if (filters.endDate) return `Until ${filters.endDate}${paymentPart}`;
+    return `Current View${paymentPart}`;
+  }, [filters.endDate, filters.startDate, filters.paymentStatus]);
 
   const getStatusClasses = (status) => {
     if (status === 'completed') return 'bg-green-100 text-green-800';
@@ -474,6 +388,11 @@ export const AdminPanel = () => {
     if (paymentStatus === 'paid') return 'bg-green-100 text-green-800';
     if (paymentStatus === 'unpaid') return 'bg-yellow-100 text-yellow-800';
     return 'bg-gray-100 text-gray-700';
+  };
+
+  const getOrderSourceClasses = (orderSource) => {
+    if (orderSource === 'external') return 'bg-violet-100 text-violet-800';
+    return 'bg-sky-100 text-sky-800';
   };
 
   const renderProofText = (order) => {
@@ -492,7 +411,6 @@ export const AdminPanel = () => {
           <div className="flex flex-wrap gap-3">
             <Link to="/admin" className="rounded-md bg-gray-900 px-4 py-2 text-white">Orders</Link>
             <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Menu</Link>
-            <Link to="/admin/external" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">External Orders</Link>
             <Link to="/admin/gallery" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Gallery</Link>
             <button onClick={handleSignOut} className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Sign Out</button>
           </div>
@@ -509,7 +427,7 @@ export const AdminPanel = () => {
             <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200">All Dates</button>
           </div>
 
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-6">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-5">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
               <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -537,7 +455,7 @@ export const AdminPanel = () => {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Order Source</label>
-              <select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select value={filters.orderSource} onChange={(e) => setFilters({ ...filters, orderSource: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="all">All</option>
                 <option value="internal">Internal</option>
                 <option value="external">External</option>
@@ -561,18 +479,14 @@ export const AdminPanel = () => {
               <p className="text-sm text-gray-500">{rangeLabel}</p>
             </div>
 
-            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Orders Today</p><p className="mt-2 text-3xl font-bold text-gray-900">{todaySummary.orders}</p></div>
               <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Total Sales Today</p><p className="mt-2 text-3xl font-bold text-green-600">₱{todaySummary.sales.toFixed(2)}</p></div>
-              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">External Orders Today</p><p className="mt-2 text-3xl font-bold text-gray-900">{todaySummary.externalOrders}</p></div>
-              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">External Sales Today</p><p className="mt-2 text-3xl font-bold text-green-600">₱{todaySummary.externalSales.toFixed(2)}</p></div>
               <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Range Orders</p><p className="mt-2 text-3xl font-bold text-gray-900">{rangeSummary.orders}</p></div>
               <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Range Sales</p><p className="mt-2 text-3xl font-bold text-green-600">₱{rangeSummary.sales.toFixed(2)}</p></div>
             </div>
 
-            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
-              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">External Orders in View</p><p className="mt-2 text-3xl font-bold text-gray-900">{rangeSummary.externalOrders}</p></div>
-              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">External Sales in View</p><p className="mt-2 text-3xl font-bold text-green-600">₱{rangeSummary.externalSales.toFixed(2)}</p></div>
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">COD Total</p><p className="mt-2 text-3xl font-bold text-orange-600">₱{rangeSummary.cod.toFixed(2)}</p></div>
               <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">GCASH Total</p><p className="mt-2 text-3xl font-bold text-blue-600">₱{rangeSummary.gcash.toFixed(2)}</p></div>
               <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">GOtyme Total</p><p className="mt-2 text-3xl font-bold text-emerald-600">₱{rangeSummary.gotyme.toFixed(2)}</p></div>
@@ -587,9 +501,6 @@ export const AdminPanel = () => {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <button onClick={handleClearCancelledOrders} disabled={clearingCancelled || cancelledCount === 0} className="rounded-md bg-rose-600 px-4 py-2 text-white transition hover:bg-rose-700 disabled:bg-gray-400">
-                    {clearingCancelled ? 'Clearing...' : 'Clear Cancelled Orders'}
-                  </button>
                   <button onClick={handleClearCompletedOrders} disabled={clearingCompleted || completedCount === 0} className="rounded-md bg-red-600 px-4 py-2 text-white transition hover:bg-red-700 disabled:bg-gray-400">
                     {clearingCompleted ? 'Clearing...' : 'Clear Completed Orders'}
                   </button>
@@ -607,8 +518,7 @@ export const AdminPanel = () => {
                 ) : (
                   filteredOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.orderId;
-                    const subtotalBeforeDiscount =
-                      Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+                    const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
 
                     return (
                       <div key={order.orderId} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -626,8 +536,9 @@ export const AdminPanel = () => {
 
                         <div className="mb-3 grid grid-cols-1 gap-2 text-sm text-gray-700">
                           <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
-                          <p><span className="font-semibold">Source:</span> {order.orderSource || 'internal'}</p>
                           <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
+                          <p><span className="font-semibold">Source:</span> {(order.orderSource || 'internal').toUpperCase()}</p>
+                          <p><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
                           <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
                           <p><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
                           <p><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
@@ -648,6 +559,7 @@ export const AdminPanel = () => {
                         <div className="mb-3 flex flex-wrap gap-2">
                           <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
                           <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getOrderSourceClasses(order.orderSource)}`}>{order.orderSource || 'internal'}</span>
                         </div>
 
                         <div className="mb-3 grid grid-cols-1 gap-3">
@@ -681,7 +593,6 @@ export const AdminPanel = () => {
                             <h4 className="mb-2 font-semibold text-gray-800">Order Details</h4>
                             <div className="space-y-2 text-sm text-gray-700">
                               <p><span className="font-semibold">Order ID:</span> {order.orderId}</p>
-                              <p><span className="font-semibold">Order Source:</span> {order.orderSource || 'internal'}</p>
                               <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
                               <p><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
                               <p><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
@@ -729,17 +640,18 @@ export const AdminPanel = () => {
               </div>
 
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[2200px] text-sm">
+                <table className="w-full min-w-[2050px] text-sm">
                   <thead className="border-b bg-gray-100">
                     <tr>
                       <th className="px-4 py-3 text-left">Date Ordered</th>
                       <th className="px-4 py-3 text-left">Customer Name</th>
                       <th className="px-4 py-3 text-left">Phone Number</th>
                       <th className="px-4 py-3 text-left">Delivery Address</th>
-                      <th className="px-4 py-3 text-left">Source</th>
                       <th className="px-4 py-3 text-left">Payment</th>
+                      <th className="px-4 py-3 text-left">Source</th>
                       <th className="px-4 py-3 text-left">Payment Status</th>
                       <th className="px-4 py-3 text-left">Proof</th>
+                      <th className="px-4 py-3 text-left">Special Instructions</th>
                       <th className="px-4 py-3 text-left">Promo Code</th>
                       <th className="px-4 py-3 text-right">Discount</th>
                       <th className="px-4 py-3 text-left">Items</th>
@@ -751,12 +663,11 @@ export const AdminPanel = () => {
                   </thead>
                   <tbody>
                     {filteredOrders.length === 0 ? (
-                      <tr><td colSpan="15" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
+                      <tr><td colSpan="16" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
                     ) : (
                       filteredOrders.map((order) => {
                         const isExpanded = expandedOrderId === order.orderId;
-                        const subtotalBeforeDiscount =
-                          Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+                        const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
 
                         return (
                           <React.Fragment key={order.orderId}>
@@ -765,8 +676,12 @@ export const AdminPanel = () => {
                               <td className="px-4 py-3">{order.customerName}</td>
                               <td className="px-4 py-3">{order.phoneNumber}</td>
                               <td className="px-4 py-3">{order.deliveryAddress}</td>
-                              <td className="px-4 py-3">{order.orderSource || 'internal'}</td>
                               <td className="px-4 py-3">{order.paymentMethod || 'N/A'}</td>
+                              <td className="px-4 py-3">
+                                <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getOrderSourceClasses(order.orderSource)}`}>
+                                  {order.orderSource || 'internal'}
+                                </span>
+                              </td>
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
                                   <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
@@ -791,11 +706,14 @@ export const AdminPanel = () => {
                                   )}
                                 </div>
                               </td>
+                              <td className="px-4 py-3 max-w-[220px]">
+                                <p className="whitespace-pre-wrap break-words text-sm text-gray-700">{order.specialInstructions || 'None'}</p>
+                              </td>
                               <td className="px-4 py-3">{order.promoCode || 'None'}</td>
                               <td className="px-4 py-3 text-right">-₱{Number(order.discountAmount || 0).toFixed(2)}</td>
                               <td className="px-4 py-3">{order.itemsSummary || 'No items'}</td>
                               <td className="px-4 py-3 text-center">{order.itemCount}</td>
-                              <td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount).toFixed(2)}</td>
+                              <td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount || 0).toFixed(2)}</td>
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
                                   <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
@@ -818,7 +736,7 @@ export const AdminPanel = () => {
                             </tr>
                             {isExpanded && (
                               <tr className="border-b bg-gray-50">
-                                <td colSpan="15" className="px-6 py-4">
+                                <td colSpan="16" className="px-6 py-4">
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
                                       <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
@@ -827,8 +745,8 @@ export const AdminPanel = () => {
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Customer:</span> {order.customerName}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
-                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Order Source:</span> {order.orderSource || 'internal'}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Source:</span> {(order.orderSource || 'internal').toUpperCase()}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Status:</span> {order.paymentStatus}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
                                       {order.paymentProofUrl && (
