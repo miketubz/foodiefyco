@@ -1,33 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
 
-const normalizeSource = (value) => {
-  const source = String(value || '').trim().toLowerCase();
-  if (!source || source === 'website' || source === 'internal') return 'internal';
-  if (source === 'external') return 'external';
-  return source;
-};
-
-const getDateBounds = (startDate, endDate) => {
-  let startIso;
-  let endIsoExclusive;
-
-  if (startDate) {
-    const start = new Date(`${startDate}T00:00:00`);
-    if (!Number.isNaN(start.getTime())) startIso = start.toISOString();
-  }
-
-  if (endDate) {
-    const end = new Date(`${endDate}T00:00:00`);
-    if (!Number.isNaN(end.getTime())) {
-      end.setDate(end.getDate() + 1);
-      endIsoExclusive = end.toISOString();
-    }
-  }
-
-  return { startIso, endIsoExclusive };
-};
-
 export const useOrdersExport = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -63,34 +36,16 @@ export const useOrdersExport = () => {
         )
       `);
 
-      const { startIso, endIsoExclusive } = getDateBounds(
-        filters?.startDate,
-        filters?.endDate
-      );
-
-      if (startIso) {
-        query = query.gte('created_at', startIso);
+      if (filters?.startDate) {
+        query = query.gte('created_at', filters.startDate);
       }
 
-      if (endIsoExclusive) {
-        query = query.lt('created_at', endIsoExclusive);
+      if (filters?.endDate) {
+        query = query.lte('created_at', `${filters.endDate}T23:59:59`);
       }
 
       if (filters?.status && filters.status !== 'all') {
         query = query.eq('status', filters.status);
-      }
-
-      if (filters?.paymentStatus && filters.paymentStatus !== 'all') {
-        query = query.eq('payment_status', filters.paymentStatus);
-      }
-
-      if (filters?.orderSource && filters.orderSource !== 'all') {
-        const source = normalizeSource(filters.orderSource);
-        if (source === 'external') {
-          query = query.eq('order_source', 'external');
-        } else {
-          query = query.or('order_source.is.null,order_source.eq.internal,order_source.eq.website');
-        }
       }
 
       const { data, error: fetchError } = await query.order('created_at', {
@@ -118,13 +73,10 @@ export const useOrdersExport = () => {
           customerName: order.customer_name || 'N/A',
           phoneNumber: order.phone_number || '',
           deliveryAddress: order.delivery_address || '',
-          specialInstructions:
-            order.special_instructions === null || order.special_instructions === undefined || String(order.special_instructions).trim() === ''
-              ? 'None'
-              : String(order.special_instructions).trim(),
+          specialInstructions: order.special_instructions || '',
           paymentMethod: order.payment_method || 'COD',
-          paymentStatus: String(order.payment_status || 'unpaid').toLowerCase(),
-          orderSource: normalizeSource(order.order_source),
+          paymentStatus: order.payment_status || 'unpaid',
+          orderSource: order.order_source || 'internal',
           promoCode: order.promo_code || '',
           discountAmount: Number(order.discount_amount || 0),
           paymentProofOption: order.payment_proof_option || '',
@@ -136,7 +88,7 @@ export const useOrdersExport = () => {
           itemsSummary: orderItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
           items: orderItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
           orderItems,
-          status: String(order.status || 'pending').toLowerCase(),
+          status: order.status || 'pending',
         };
       });
 
