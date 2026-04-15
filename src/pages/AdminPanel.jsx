@@ -13,6 +13,7 @@ export const AdminPanel = () => {
     endDate: '',
     status: 'all',
     paymentStatus: 'all',
+    source: 'all',
   });
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -307,10 +308,10 @@ export const AdminPanel = () => {
     return orders.filter((order) => {
       const matchesPaymentStatus =
         filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
-      const matchesOrderSource =
-        filters.orderSource === 'all' || (order.orderSource || 'internal') === filters.orderSource;
+      const matchesSource =
+        filters.source === 'all' || (order.orderSource || 'internal') === filters.source;
 
-      if (!matchesPaymentStatus || !matchesOrderSource) return false;
+      if (!matchesPaymentStatus || !matchesSource) return false;
       if (!term) return true;
 
       const orderItemText = (order.orderItems || [])
@@ -331,14 +332,13 @@ export const AdminPanel = () => {
         order.paymentProofOption,
         order.itemsSummary,
         order.specialInstructions,
-        order.orderSource,
         order.status,
         orderItemText,
       ].join(' ').toLowerCase();
 
       return haystack.includes(term);
     });
-  }, [orders, searchTerm, filters.paymentStatus, filters.orderSource]);
+  }, [orders, searchTerm, filters.paymentStatus, filters.source]);
 
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
@@ -370,12 +370,14 @@ export const AdminPanel = () => {
       filters.paymentStatus === 'all'
         ? ''
         : ` • ${filters.paymentStatus === 'paid' ? 'Paid Only' : 'Unpaid Only'}`;
+    const sourcePart =
+      filters.source === 'all' ? '' : ` • ${filters.source === 'external' ? 'External Only' : 'Internal Only'}`;
 
-    if (filters.startDate && filters.endDate) return `${filters.startDate} to ${filters.endDate}${paymentPart}`;
-    if (filters.startDate) return `From ${filters.startDate}${paymentPart}`;
-    if (filters.endDate) return `Until ${filters.endDate}${paymentPart}`;
-    return `Current View${paymentPart}`;
-  }, [filters.endDate, filters.startDate, filters.paymentStatus]);
+    if (filters.startDate && filters.endDate) return `${filters.startDate} to ${filters.endDate}${paymentPart}${sourcePart}`;
+    if (filters.startDate) return `From ${filters.startDate}${paymentPart}${sourcePart}`;
+    if (filters.endDate) return `Until ${filters.endDate}${paymentPart}${sourcePart}`;
+    return `Current View${paymentPart}${sourcePart}`;
+  }, [filters.endDate, filters.startDate, filters.paymentStatus, filters.source]);
 
   const getStatusClasses = (status) => {
     if (status === 'completed') return 'bg-green-100 text-green-800';
@@ -427,7 +429,7 @@ export const AdminPanel = () => {
             <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200">All Dates</button>
           </div>
 
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-5">
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-6">
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label>
               <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -455,7 +457,7 @@ export const AdminPanel = () => {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-gray-700">Order Source</label>
-              <select value={filters.orderSource} onChange={(e) => setFilters({ ...filters, orderSource: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="all">All</option>
                 <option value="internal">Internal</option>
                 <option value="external">External</option>
@@ -746,7 +748,6 @@ export const AdminPanel = () => {
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
-                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Source:</span> {(order.orderSource || 'internal').toUpperCase()}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Status:</span> {order.paymentStatus}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
                                       {order.paymentProofUrl && (
