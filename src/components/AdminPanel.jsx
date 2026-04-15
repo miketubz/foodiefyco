@@ -13,6 +13,7 @@ export const AdminPanel = () => {
     endDate: '',
     status: 'all',
     paymentStatus: 'all',
+    orderSource: 'all',
   });
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -66,6 +67,10 @@ export const AdminPanel = () => {
       startDate: nextFilters.startDate || undefined,
       endDate: nextFilters.endDate || undefined,
       status: nextFilters.status === 'all' ? undefined : nextFilters.status,
+      paymentStatus:
+        nextFilters.paymentStatus === 'all' ? undefined : nextFilters.paymentStatus,
+      orderSource:
+        nextFilters.orderSource === 'all' ? undefined : nextFilters.orderSource,
     });
 
     await fetchTodaySummary();
