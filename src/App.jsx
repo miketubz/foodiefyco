@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AdminPanel } from './components/AdminPanel.jsx';
+import { AdminPanel2 } from './components/AdminPanel2.jsx';
 import MenuAdminPanel from './components/MenuAdminPanel.jsx';
 import RequireAdmin from './components/RequireAdmin.jsx';
 import AdminLoginPage from './pages/AdminLoginPage.jsx';
@@ -20,6 +21,15 @@ function App() {
         element={
           <RequireAdmin>
             <AdminPanel />
+          </RequireAdmin>
+        }
+      />
+
+      <Route
+        path="/admin2"
+        element={
+          <RequireAdmin>
+            <AdminPanel2 />
           </RequireAdmin>
         }
       />
