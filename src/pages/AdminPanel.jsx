@@ -304,8 +304,10 @@ export const AdminPanel = () => {
     return orders.filter((order) => {
       const matchesPaymentStatus =
         filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
+      const matchesOrderSource =
+        filters.orderSource === 'all' || (order.orderSource || 'internal') === filters.orderSource;
 
-      if (!matchesPaymentStatus) return false;
+      if (!matchesPaymentStatus || !matchesOrderSource) return false;
       if (!term) return true;
 
       const orderItemText = (order.orderItems || [])
@@ -326,13 +328,14 @@ export const AdminPanel = () => {
         order.paymentProofOption,
         order.itemsSummary,
         order.specialInstructions,
+        order.orderSource,
         order.status,
         orderItemText,
       ].join(' ').toLowerCase();
 
       return haystack.includes(term);
     });
-  }, [orders, searchTerm, filters.paymentStatus]);
+  }, [orders, searchTerm, filters.paymentStatus, filters.orderSource]);
 
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
@@ -445,6 +448,14 @@ export const AdminPanel = () => {
                 <option value="all">All</option>
                 <option value="paid">Paid</option>
                 <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Order Source</label>
+              <select value={filters.orderSource} onChange={(e) => setFilters({ ...filters, orderSource: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="all">All</option>
+                <option value="internal">Internal</option>
+                <option value="external">External</option>
               </select>
             </div>
             <div className="flex items-end">
