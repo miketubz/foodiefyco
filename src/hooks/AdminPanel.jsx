@@ -13,6 +13,7 @@ export const AdminPanel = () => {
     endDate: '',
     status: 'all',
     paymentStatus: 'all',
+    orderSource: 'all',
   });
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -66,6 +67,10 @@ export const AdminPanel = () => {
       startDate: nextFilters.startDate || undefined,
       endDate: nextFilters.endDate || undefined,
       status: nextFilters.status === 'all' ? undefined : nextFilters.status,
+      paymentStatus:
+        nextFilters.paymentStatus === 'all' ? undefined : nextFilters.paymentStatus,
+      orderSource:
+        nextFilters.orderSource === 'all' ? undefined : nextFilters.orderSource,
     });
 
     await fetchTodaySummary();
@@ -170,12 +175,28 @@ export const AdminPanel = () => {
       return;
     }
 
-    const confirmed = window.confirm('Clear all completed orders?');
+    const confirmed = window.confirm('Clear all completed orders? This also removes uploaded proof files.');
     if (!confirmed) return;
 
     setClearingCompleted(true);
     setActionError('');
     setSuccessMessage('');
+
+    const proofPaths = completedOrders
+      .map((order) => order.paymentProofPath)
+      .filter(Boolean);
+
+    if (proofPaths.length > 0) {
+      const { error: storageError } = await supabase.storage
+        .from('payment-proofs')
+        .remove(proofPaths);
+
+      if (storageError) {
+        setActionError(`Could not delete proof images: ${storageError.message}`);
+        setClearingCompleted(false);
+        return;
+      }
+    }
 
     const ids = completedOrders.map((order) => order.orderId);
     const { error: deleteError } = await supabase.from('orders').delete().in('id', ids);
@@ -189,7 +210,7 @@ export const AdminPanel = () => {
     await handleFetchOrders();
     setClearingCompleted(false);
     setExpandedOrderId(null);
-    setSuccessMessage('Completed orders cleared.');
+    setSuccessMessage('Completed orders and uploaded proof files cleared.');
   };
 
   const handlePrintReceipt = (order) => {
@@ -200,6 +221,14 @@ export const AdminPanel = () => {
     }
 
     const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+    const proofLabel =
+      order.paymentMethod === 'COD'
+        ? 'Not required'
+        : order.paymentProofOption === 'scan_on_delivery'
+        ? 'Scan upon delivery'
+        : order.paymentProofUrl
+        ? 'Uploaded'
+        : 'No upload yet';
 
     const itemRows = (order.orderItems || [])
       .map(
@@ -232,6 +261,7 @@ export const AdminPanel = () => {
               <p><strong>Address:</strong> ${order.deliveryAddress}</p>
               <p><strong>Payment Method:</strong> ${order.paymentMethod || 'Not specified'}</p>
               <p><strong>Payment Status:</strong> ${order.paymentStatus || 'unpaid'}</p>
+              <p><strong>Proof Option:</strong> ${proofLabel}</p>
               <p><strong>Promo Code:</strong> ${order.promoCode || 'None'}</p>
               <p><strong>Special Instructions:</strong> ${order.specialInstructions || 'None'}</p>
             </div>
@@ -260,7 +290,9 @@ export const AdminPanel = () => {
     receiptWindow.document.close();
   };
 
-  const handlePdfReceipt = (order) => handlePrintReceipt(order);
+  const handlePdfReceipt = (order) => {
+    handlePrintReceipt(order);
+  };
 
   const handleSignOut = async () => {
     const { error: signOutError } = await supabase.auth.signOut();
@@ -277,8 +309,10 @@ export const AdminPanel = () => {
     return orders.filter((order) => {
       const matchesPaymentStatus =
         filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
+      const matchesOrderSource =
+        filters.orderSource === 'all' || (order.orderSource || 'internal') === filters.orderSource;
 
-      if (!matchesPaymentStatus) return false;
+      if (!matchesPaymentStatus || !matchesOrderSource) return false;
       if (!term) return true;
 
       const orderItemText = (order.orderItems || [])
@@ -296,15 +330,17 @@ export const AdminPanel = () => {
         order.paymentStatus,
         order.promoCode,
         order.discountAmount,
+        order.paymentProofOption,
         order.itemsSummary,
         order.specialInstructions,
+        order.orderSource,
         order.status,
         orderItemText,
       ].join(' ').toLowerCase();
 
       return haystack.includes(term);
     });
-  }, [orders, searchTerm, filters.paymentStatus]);
+  }, [orders, searchTerm, filters.paymentStatus, filters.orderSource]);
 
   const completedCount = useMemo(
     () => orders.filter((order) => order.status === 'completed').length,
@@ -356,6 +392,18 @@ export const AdminPanel = () => {
     return 'bg-gray-100 text-gray-700';
   };
 
+  const getOrderSourceClasses = (orderSource) => {
+    if (orderSource === 'external') return 'bg-violet-100 text-violet-800';
+    return 'bg-sky-100 text-sky-800';
+  };
+
+  const renderProofText = (order) => {
+    if (order.paymentMethod === 'COD') return 'Not required';
+    if (order.paymentProofOption === 'scan_on_delivery') return 'Scan on delivery';
+    if (order.paymentProofUrl) return 'Uploaded';
+    return 'No upload yet';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="mx-auto max-w-7xl">
@@ -365,6 +413,7 @@ export const AdminPanel = () => {
           <div className="flex flex-wrap gap-3">
             <Link to="/admin" className="rounded-md bg-gray-900 px-4 py-2 text-white">Orders</Link>
             <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Menu</Link>
+            <Link to="/admin/gallery" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Gallery</Link>
             <button onClick={handleSignOut} className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Sign Out</button>
           </div>
         </div>
@@ -404,6 +453,14 @@ export const AdminPanel = () => {
                 <option value="all">All</option>
                 <option value="paid">Paid</option>
                 <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Order Source</label>
+              <select value={filters.orderSource} onChange={(e) => setFilters({ ...filters, orderSource: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="all">All</option>
+                <option value="internal">Internal</option>
+                <option value="external">External</option>
               </select>
             </div>
             <div className="flex items-end">
@@ -482,15 +539,29 @@ export const AdminPanel = () => {
                         <div className="mb-3 grid grid-cols-1 gap-2 text-sm text-gray-700">
                           <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                           <p><span className="font-semibold">Payment:</span> {order.paymentMethod || 'N/A'}</p>
+                          <p><span className="font-semibold">Source:</span> {(order.orderSource || 'internal').toUpperCase()}</p>
+                          <p><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
                           <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
                           <p><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
-                          <p><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p>
+                          <p><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
+                          {order.paymentProofUrl && (
+                            <a
+                              href={order.paymentProofUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sm font-semibold text-blue-600 underline"
+                            >
+                              View Proof
+                            </a>
+                          )}
                           <p><span className="font-semibold">Items:</span> {order.itemsSummary || 'No items'}</p>
+                          <p><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p>
                         </div>
 
                         <div className="mb-3 flex flex-wrap gap-2">
                           <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
                           <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
+                          <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getOrderSourceClasses(order.orderSource)}`}>{order.orderSource || 'internal'}</span>
                         </div>
 
                         <div className="mb-3 grid grid-cols-1 gap-3">
@@ -526,6 +597,19 @@ export const AdminPanel = () => {
                               <p><span className="font-semibold">Order ID:</span> {order.orderId}</p>
                               <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
                               <p><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
+                              <p><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
+                              {order.paymentProofUrl && (
+                                <p>
+                                  <a
+                                    href={order.paymentProofUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="font-semibold text-blue-600 underline"
+                                  >
+                                    View Proof Image
+                                  </a>
+                                </p>
+                              )}
                               <p><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p>
                               <p><span className="font-semibold">Total:</span> ₱{Number(order.totalAmount || 0).toFixed(2)}</p>
                               <p><span className="font-semibold">Special Instructions:</span> {order.specialInstructions || 'None'}</p>
@@ -558,7 +642,7 @@ export const AdminPanel = () => {
               </div>
 
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1850px] text-sm">
+                <table className="w-full min-w-[2050px] text-sm">
                   <thead className="border-b bg-gray-100">
                     <tr>
                       <th className="px-4 py-3 text-left">Date Ordered</th>
@@ -566,7 +650,10 @@ export const AdminPanel = () => {
                       <th className="px-4 py-3 text-left">Phone Number</th>
                       <th className="px-4 py-3 text-left">Delivery Address</th>
                       <th className="px-4 py-3 text-left">Payment</th>
+                      <th className="px-4 py-3 text-left">Source</th>
                       <th className="px-4 py-3 text-left">Payment Status</th>
+                      <th className="px-4 py-3 text-left">Proof</th>
+                      <th className="px-4 py-3 text-left">Special Instructions</th>
                       <th className="px-4 py-3 text-left">Promo Code</th>
                       <th className="px-4 py-3 text-right">Discount</th>
                       <th className="px-4 py-3 text-left">Items</th>
@@ -578,7 +665,7 @@ export const AdminPanel = () => {
                   </thead>
                   <tbody>
                     {filteredOrders.length === 0 ? (
-                      <tr><td colSpan="13" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
+                      <tr><td colSpan="16" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr>
                     ) : (
                       filteredOrders.map((order) => {
                         const isExpanded = expandedOrderId === order.orderId;
@@ -593,6 +680,11 @@ export const AdminPanel = () => {
                               <td className="px-4 py-3">{order.deliveryAddress}</td>
                               <td className="px-4 py-3">{order.paymentMethod || 'N/A'}</td>
                               <td className="px-4 py-3">
+                                <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getOrderSourceClasses(order.orderSource)}`}>
+                                  {order.orderSource || 'internal'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
                                   <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span>
                                   <select value={order.paymentStatus} onChange={(e) => handlePaymentStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
@@ -601,11 +693,29 @@ export const AdminPanel = () => {
                                   </select>
                                 </div>
                               </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col gap-2">
+                                  <span>{renderProofText(order)}</span>
+                                  {order.paymentProofUrl && (
+                                    <a
+                                      href={order.paymentProofUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-semibold text-blue-600 underline"
+                                    >
+                                      View Proof
+                                    </a>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 max-w-[220px]">
+                                <p className="whitespace-pre-wrap break-words text-sm text-gray-700">{order.specialInstructions || 'None'}</p>
+                              </td>
                               <td className="px-4 py-3">{order.promoCode || 'None'}</td>
                               <td className="px-4 py-3 text-right">-₱{Number(order.discountAmount || 0).toFixed(2)}</td>
                               <td className="px-4 py-3">{order.itemsSummary || 'No items'}</td>
                               <td className="px-4 py-3 text-center">{order.itemCount}</td>
-                              <td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount).toFixed(2)}</td>
+                              <td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount || 0).toFixed(2)}</td>
                               <td className="px-4 py-3">
                                 <div className="flex flex-col gap-2">
                                   <span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span>
@@ -628,7 +738,7 @@ export const AdminPanel = () => {
                             </tr>
                             {isExpanded && (
                               <tr className="border-b bg-gray-50">
-                                <td colSpan="13" className="px-6 py-4">
+                                <td colSpan="16" className="px-6 py-4">
                                   <div className="grid gap-4 md:grid-cols-2">
                                     <div className="rounded-lg border border-gray-200 bg-white p-4">
                                       <h3 className="mb-3 font-semibold text-gray-800">Order Details</h3>
@@ -638,7 +748,21 @@ export const AdminPanel = () => {
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Phone:</span> {order.phoneNumber}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod || 'Not specified'}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Source:</span> {(order.orderSource || 'internal').toUpperCase()}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Status:</span> {order.paymentStatus}</p>
+                                      <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>
+                                      {order.paymentProofUrl && (
+                                        <p className="mb-2 text-sm text-gray-700">
+                                          <a
+                                            href={order.paymentProofUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="font-semibold text-blue-600 underline"
+                                          >
+                                            View Proof Image
+                                          </a>
+                                        </p>
+                                      )}
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p>
                                       <p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p>
