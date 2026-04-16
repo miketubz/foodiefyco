@@ -1,6 +1,9 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AdminPanel from './pages/AdminPanel';
+ import SellerPanel from './pages/SellerPanel'; // top
+   
+   <Route path="/sellerpanel" element={<SellerPanel />} /> // inside <Routes>
 
 function App() {
   return (
@@ -15,3 +18,5 @@ function App() {
 }
 
 export default App;
+
+  
