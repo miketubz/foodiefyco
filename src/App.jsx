@@ -3,24 +3,23 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import AdminPanel from './pages/AdminPanel';
 import ArchivePage from './pages/ArchivePage';
 import ProfitCalculator from './pages/ProfitCalculator';
-// Add your existing imports here - LoginPage, etc.
-import LoginPage from './pages/LoginPage'; // or whatever your login file is called
+import LoginPage from './pages/LoginPage';
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* Your existing routes - ADD THESE BACK */}
+        {/* Login Route */}
         <Route path="/admin/login" element={<LoginPage />} />
-        <Route path="/" element={<YourFrontStorePage />} /> {/* whatever your home page is */}
         
-        {/* New routes I added */}
+        {/* Admin Routes */}
         <Route path="/admin" element={<AdminPanel />} />
         <Route path="/admin/archive" element={<ArchivePage />} />
         <Route path="/admin/profit" element={<ProfitCalculator />} />
         
-        {/* Catch-all: redirect unknown routes to home */}
-        <Route path="*" element={<Navigate to="/" />} />
+        {/* Redirects - since you don't have a public home page */}
+        <Route path="/" element={<Navigate to="/admin/login" replace />} />
+        <Route path="*" element={<Navigate to="/admin/login" replace />} />
       </Routes>
     </Router>
   );
