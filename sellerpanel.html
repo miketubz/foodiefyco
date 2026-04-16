@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seller Panel</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; background: #f9fafb; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .card { background: white; padding: 20px; margin-bottom: 16px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 4px solid #3b82f6; }
+    .btn { padding: 8px 16px; background: #ea580c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn:hover { opacity: 0.9; }
+    .btn-green { background: #16a34a; }
+    .tab { padding: 12px 24px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; font-size: 16px; }
+    .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 500; }
+    .flex { display: flex; justify-content: space-between; align-items: start; }
+    .grid { display: grid; gap: 16px; }
+    input[type="checkbox"] { margin-right: 12px; width: 16px; height: 16px; cursor: pointer; }
+    #bulkActions { background: white; padding: 16px; border-radius: 8px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: none; }
+    .status-badge { font-size: 12px; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Seller Panel</h1>
+    <div style="border-bottom: 1px solid #e5e7eb; margin-bottom: 24px;">
+      <button class="tab tab-active" id="activeTab">Active Orders</button>
+      <button class="tab" id="archivedTab">Archived Orders</button>
+    </div>
+    
+    <div id="bulkActions">
+      <label style="cursor: pointer;"><input type="checkbox" id="selectAll"> Select All</label>
+      <span id="selectedCount" style="margin-left: 16px; color: #4b5563; font-size: 14px;"></span>
+      <button class="btn" id="archiveBtn" style="margin-left: 16px;">Archive Selected</button>
+    </div>
+    
+    <div id="loading">Loading...</div>
+    <div id="orders"></div>
+  </div>
+
+  <script>
+    // REPLACE THESE 2 LINES with your actual values from Vercel env vars
+    const SUPABASE_URL = 'VITE_SUPABASE_URL=https://ieqpalamjvxxwxjupwnv.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_jV3pL1Ly3vEn7B_WHXwGmg_76SOOQq1';
+    
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
+    let currentTab = 'active';
+    let selectedIds = new Set();
+    let allOrders = [];
+
+    async function loadOrders() {
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('orders').innerHTML = '';
+      
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('is_archived', currentTab === 'archived')
+        .order('created_at', { ascending: false });
+      
+      document.getElementById('loading').style.display = 'none';
+      
+      if (error) {
+        document.getElementById('orders').innerHTML = '<div class="card" style="color: red;">Error: ' + error.message + '</div>';
+        return;
+      }
+      
+      allOrders = data || [];
+      selectedIds = new Set();
+      renderOrders();
+    }
+
+    function renderOrders() {
+      const container = document.getElementById('orders');
+      const bulkDiv = document.getElementById('bulkActions');
+      
+      if (allOrders.length === 0) {
+        container.innerHTML = '<div class="card">No ' + currentTab + ' orders found</div>';
+        bulkDiv.style.display = 'none';
+        return;
+      }
+
+      bulkDiv.style.display = 'block';
+      document.getElementById('archiveBtn').textContent = currentTab === 'active'? 'Archive Selected' : 'Unarchive Selected';
+      document.getElementById('archiveBtn').className = currentTab === 'active'? 'btn' : 'btn btn-green';
+      
+      container.innerHTML = '<div class="grid">' + allOrders.map(order => {
+        const items = order.itemlist2 || [];
+        const itemsHtml = items.length > 0 
+          ? items.map(i => `<div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;">
+              <span>Item ID: ${i.menu_item_id} × ${i.quantity}</span>
+              <span style="font-weight: 500;">₱${i.price}</span>
+            </div>`).join('')
+          : '<div style="color: #9ca3af; font-size: 14px;">No items</div>';
+
+        const statusColor = order.status === 'completed'? '#dcfce7' : '#fef3c7';
+        const statusTextColor = order.status === 'completed'? '#166534' : '#854d0e';
+
+        return `
+          <div class="card">
+            <div style="display: flex; gap: 16px;">
+              <input type="checkbox" data-id="${order.id}" ${selectedIds.has(order.id)? 'checked' : ''}>
+              <div style="flex: 1;">
+                <div class="flex" style="margin-bottom: 12px;">
+                  <div>
+                    <h3 style="margin: 0; font-size: 18px;">Order #${order.id}</h3>
+                    <p style="margin: 4px 0 0 0; font-size: 14px; color: #4b5563;">${new Date(order.created_at).toLocaleString()}</p>
+                    ${order.is_archived && order.archived_at? `<p style="margin: 4px 0 0 0; font-size: 12px; color: #ea580c;">Archived: ${new Date(order.archived_at).toLocaleString()}</p>` : ''}
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-size: 24px; font-weight: bold; color: #16a34a;">₱${order.total_amount || 0}</div>
+                    <div class="status-badge" style="background: ${statusColor}; color: ${statusTextColor};">
+                      ${order.status || 'pending'}
+                    </div>
+                  </div>
+                </div>
+                <div style="border-top: 1px solid #e5e7eb; padding-top: 12px;">
+                  <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px;">Items:</div>
+                  ${itemsHtml}
+                </div>
+                ${order.customer_name? `
+                  <div style="border-top: 1px solid #e5e7eb; padding-top: 12px; margin-top: 12px; font-size: 14px;">
+                    <div><strong>Customer:</strong> ${order.customer_name}</div>
+                    ${order.customer_phone? `<div><strong>Phone:</strong> ${order.customer_phone}</div>` : ''}
+                    ${order.customer_address? `<div><strong>Address:</strong> ${order.customer_address}</div>` : ''}
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('') + '</div>';
+
+      updateSelectedCount();
+      attachCheckboxListeners();
+    }
+
+    function attachCheckboxListeners() {
+      document.querySelectorAll('input[data-id]').forEach(cb => {
+        cb.onchange = (e) => {
+          const id = Number(e.target.dataset.id);
+          if (e.target.checked) selectedIds.add(id);
+          else selectedIds.delete(id);
+          updateSelectedCount();
+        };
+      });
+    }
+
+    function updateSelectedCount() {
+      const count = selectedIds.size;
+      document.getElementById('selectedCount').textContent = count > 0? count + ' selected' : '';
+      document.getElementById('selectAll').checked = count === allOrders.length && allOrders.length > 0;
+    }
+
+    document.getElementById('selectAll').onchange = (e) => {
+      selectedIds = e.target.checked? new Set(allOrders.map(o => o.id)) : new Set();
+      renderOrders();
+    };
+
+    document.getElementById('archiveBtn').onclick = async () => {
+      if (selectedIds.size === 0) return alert('Select orders first');
+      const archive = currentTab === 'active';
+      const { error } = await supabase
+        .from('orders')
+        .update({ is_archived: archive, archived_at: archive? new Date().toISOString() : null })
+        .in('id', Array.from(selectedIds));
+      
+      if (error) alert('Error: ' + error.message);
+      else loadOrders();
+    };
+
+    document.getElementById('activeTab').onclick = () => {
+      currentTab = 'active';
+      document.getElementById('activeTab').className = 'tab tab-active';
+      document.getElementById('archivedTab').className = 'tab';
+      loadOrders();
+    };
+
+    document.getElementById('archivedTab').onclick = () => {
+      currentTab = 'archived';
+      document.getElementById('archivedTab').className = 'tab tab-active';
+      document.getElementById('activeTab').className = 'tab';
+      loadOrders();
+    };
+
+    loadOrders();
+  </script>
+</body>
+</html>
