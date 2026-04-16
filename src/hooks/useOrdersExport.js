@@ -1,137 +1,200 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { supabase } from '../lib/supabaseClient.js';
 
-const normalizeSourceValue = (value) => {
+const normalizeText = (value, fallback = '') => {
+  if (value === null || value === undefined) return fallback;
+  const text = String(value).trim();
+  return text || fallback;
+};
+
+const normalizeSource = (value) => {
   const source = String(value || '').trim().toLowerCase();
   if (!source || source === 'website' || source === 'internal') return 'internal';
   if (source === 'external') return 'external';
   return source;
 };
 
-const toIsoStart = (date) => new Date(`${date}T00:00:00`).toISOString();
-const toIsoNextDay = (date) => {
-  const d = new Date(`${date}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString();
+const normalizePaymentMethod = (value) => {
+  const text = normalizeText(value, 'N/A');
+  return text;
+};
+
+const normalizePaymentStatus = (value) => {
+  const text = String(value || 'unpaid').trim().toLowerCase();
+  return text === 'paid' ? 'paid' : 'unpaid';
+};
+
+const makePublicUrl = (path) => {
+  const cleanPath = normalizeText(path);
+  if (!cleanPath) return '';
+  const { data } = supabase.storage.from('payment-proofs').getPublicUrl(cleanPath);
+  return data?.publicUrl || '';
 };
 
 export const useOrdersExport = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState('');
 
-  const fetchOrdersForExport = async (filters = {}) => {
+  const fetchOrdersForExport = useCallback(async (filters = {}) => {
     setLoading(true);
-    setError(null);
+    setError('');
 
     try {
-      let query = supabase.from('orders').select(`
-        id,
-        created_at,
-        total_amount,
-        status,
-        payment_status,
-        promo_code,
-        discount_amount,
-        order_source,
-        payment_proof_option,
-        payment_proof_path,
-        customer_name,
-        phone_number,
-        delivery_address,
-        special_instructions,
-        payment_method,
-        order_items (
-          quantity,
-          price,
-          menu_item:menu_item_id (
-            name
-          )
+      let ordersQuery = supabase
+        .from('orders')
+        .select(
+          `
+            id,
+            created_at,
+            updated_at,
+            total_amount,
+            status,
+            payment_status,
+            payment_method,
+            payment_proof_option,
+            payment_proof_path,
+            promo_code,
+            discount_amount,
+            order_source,
+            customer_name,
+            phone_number,
+            delivery_address,
+            special_instructions
+          `
         )
-      `);
+        .order('created_at', { ascending: false });
 
       if (filters.startDate) {
-        query = query.gte('created_at', toIsoStart(filters.startDate));
+        ordersQuery = ordersQuery.gte('created_at', `${filters.startDate}T00:00:00`);
       }
 
       if (filters.endDate) {
-        query = query.lt('created_at', toIsoNextDay(filters.endDate));
+        ordersQuery = ordersQuery.lte('created_at', `${filters.endDate}T23:59:59.999`);
       }
 
       if (filters.status && filters.status !== 'all') {
-        query = query.eq('status', filters.status);
+        ordersQuery = ordersQuery.eq('status', filters.status);
       }
 
       if (filters.paymentStatus && filters.paymentStatus !== 'all') {
-        query = query.eq('payment_status', filters.paymentStatus);
+        ordersQuery = ordersQuery.eq('payment_status', filters.paymentStatus);
       }
 
       if (filters.orderSource && filters.orderSource !== 'all') {
-        const source = normalizeSourceValue(filters.orderSource);
+        const source = normalizeSource(filters.orderSource);
         if (source === 'external') {
-          query = query.eq('order_source', 'external');
+          ordersQuery = ordersQuery.eq('order_source', 'external');
         } else {
-          query = query.or('order_source.is.null,order_source.eq.internal,order_source.eq.website');
+          ordersQuery = ordersQuery.or('order_source.is.null,order_source.eq.internal,order_source.eq.website');
         }
       }
 
-      const { data, error: fetchError } = await query.order('created_at', {
-        ascending: false,
-      });
+      const { data: ordersData, error: ordersError } = await ordersQuery;
+      if (ordersError) throw ordersError;
 
-      if (fetchError) throw fetchError;
+      const rawOrders = ordersData || [];
+      const orderIds = rawOrders.map((order) => order.id).filter(Boolean);
 
-      const transformedOrders = (data || []).map((order) => {
-        const orderItems = (order.order_items || []).map((item) => ({
-          name: item.menu_item?.name || 'Unknown Item',
-          quantity: Number(item.quantity || 0),
-          price: Number(item.price || 0),
-          subtotal: Number(item.price || 0) * Number(item.quantity || 0),
-        }));
+      let itemsByOrderId = {};
+      if (orderIds.length > 0) {
+        const { data: orderItemsData, error: orderItemsError } = await supabase
+          .from('order_items')
+          .select('id, order_id, menu_item_id, quantity, price')
+          .in('order_id', orderIds)
+          .order('id', { ascending: true });
 
-        const paymentProofPath = order.payment_proof_path || '';
-        const paymentProofUrl = paymentProofPath
-          ? supabase.storage.from('payment-proofs').getPublicUrl(paymentProofPath).data.publicUrl
-          : '';
+        if (orderItemsError) throw orderItemsError;
+
+        const orderItems = orderItemsData || [];
+        const menuItemIds = [...new Set(orderItems.map((item) => item.menu_item_id).filter(Boolean))];
+
+        let menuNameById = {};
+        if (menuItemIds.length > 0) {
+          const { data: menuItemsData, error: menuItemsError } = await supabase
+            .from('menu_item')
+            .select('id, name')
+            .in('id', menuItemIds);
+
+          if (menuItemsError) throw menuItemsError;
+
+          menuNameById = Object.fromEntries(
+            (menuItemsData || []).map((item) => [item.id, normalizeText(item.name, 'Unknown Item')])
+          );
+        }
+
+        itemsByOrderId = orderItems.reduce((acc, item) => {
+          const orderId = item.order_id;
+          if (!acc[orderId]) acc[orderId] = [];
+
+          const quantity = Number(item.quantity || 0);
+          const price = Number(item.price || 0);
+          const subtotal = quantity * price;
+
+          acc[orderId].push({
+            id: item.id,
+            menuItemId: item.menu_item_id,
+            name: menuNameById[item.menu_item_id] || 'Unknown Item',
+            quantity,
+            price,
+            subtotal,
+          });
+
+          return acc;
+        }, {});
+      }
+
+      const transformedOrders = rawOrders.map((order) => {
+        const orderItems = itemsByOrderId[order.id] || [];
+        const discountAmount = Number(order.discount_amount || 0);
+        const totalAmount = Number(order.total_amount || 0);
+        const createdAt = order.created_at || '';
+        const orderDate = createdAt ? new Date(createdAt).toLocaleString() : 'N/A';
+        const paymentProofPath = normalizeText(order.payment_proof_path);
+        const paymentProofUrl = makePublicUrl(paymentProofPath);
+        const itemCount = orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+        const itemsSummary = orderItems.length
+          ? orderItems.map((item) => `${item.name} x${item.quantity}`).join(', ')
+          : 'No items';
 
         return {
           orderId: order.id,
           id: order.id,
-          createdAt: order.created_at,
-          customerName: order.customer_name || 'N/A',
-          phoneNumber: order.phone_number || 'N/A',
-          deliveryAddress: order.delivery_address || 'N/A',
-          specialInstructions: order.special_instructions || '',
-          paymentMethod: order.payment_method || 'N/A',
-          paymentStatus: String(order.payment_status || 'unpaid').toLowerCase(),
-          orderSource: normalizeSourceValue(order.order_source),
-          promoCode: order.promo_code || '',
-          discountAmount: Number(order.discount_amount || 0),
-          paymentProofOption: order.payment_proof_option || '',
+          createdAt,
+          updatedAt: order.updated_at || '',
+          orderDate,
+          customerName: normalizeText(order.customer_name, 'N/A'),
+          phoneNumber: normalizeText(order.phone_number, 'N/A'),
+          deliveryAddress: normalizeText(order.delivery_address, 'N/A'),
+          specialInstructions: normalizeText(order.special_instructions, 'None'),
+          paymentMethod: normalizePaymentMethod(order.payment_method),
+          paymentStatus: normalizePaymentStatus(order.payment_status),
+          paymentProofOption: normalizeText(order.payment_proof_option),
           paymentProofPath,
           paymentProofUrl,
-          orderDate: order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A',
-          totalAmount: Number(order.total_amount || 0),
-          itemCount: orderItems.reduce((sum, item) => sum + item.quantity, 0),
-          itemsSummary: orderItems.length
-            ? orderItems.map((item) => `${item.name} x${item.quantity}`).join(', ')
-            : 'No items',
-          items: orderItems.map((item) => `${item.name} x${item.quantity}`).join(', '),
+          promoCode: normalizeText(order.promo_code),
+          discountAmount,
+          totalAmount,
+          orderSource: normalizeSource(order.order_source),
+          items: itemsSummary,
+          itemsSummary,
+          itemCount,
           orderItems,
-          status: String(order.status || 'pending').toLowerCase(),
+          status: normalizeText(order.status, 'pending').toLowerCase(),
         };
       });
 
       setOrders(transformedOrders);
       return transformedOrders;
     } catch (err) {
-      setError(err.message || 'Failed to fetch orders');
+      const message = err?.message || 'Failed to fetch orders.';
+      setError(message);
       setOrders([]);
       return [];
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   return { orders, loading, error, fetchOrdersForExport };
 };
