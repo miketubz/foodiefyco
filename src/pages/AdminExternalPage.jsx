@@ -39,6 +39,17 @@ function AdminExternalPage() {
     [subtotal, discountAmount]
   );
 
+  const paymentQrMap = {
+    GCASH: '/pix/gcash-qr.jpg',
+    GOtyme: '/pix/gotyme-qr.jpg',
+    UnionBank: '/pix/unionbank-qr.jpg',
+  };
+
+  const selectedPaymentQr =
+    paymentMethod && paymentMethod !== 'COD'
+      ? paymentQrMap[paymentMethod]
+      : '';
+
   const categories = useMemo(() => {
     const uniqueCategories = Array.from(
       new Set(
@@ -500,6 +511,19 @@ function AdminExternalPage() {
                       );
                     })}
                   </div>
+
+                  {paymentMethod !== 'COD' && selectedPaymentQr && (
+                    <div className="mt-4 rounded-2xl border border-orange-200 bg-orange-50 p-4">
+                      <p className="mb-3 text-sm font-semibold text-gray-700">
+                        Scan this QR for {paymentMethod}
+                      </p>
+                      <img
+                        src={selectedPaymentQr}
+                        alt={`${paymentMethod} QR`}
+                        className="mx-auto max-h-72 w-full max-w-xs rounded-xl border border-gray-200 bg-white object-contain p-2"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>
