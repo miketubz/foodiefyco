@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient'; // Change this path to match your AdminPanel.jsx if different
+import { supabase } from '../lib/supabaseClient';
 
 export default function SellerPanel() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedOrders, setSelectedOrders] = useState(new Set());
-  const [activeTab, setActiveTab] = useState('active'); // 'active' or 'archived'
+  const [activeTab, setActiveTab] = useState('active');
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -74,146 +74,146 @@ export default function SellerPanel() {
     }
   };
 
-  if (loading) return <div className="p-8">Loading Seller Panel...</div>;
-  if (error) return <div className="p-8 text-red-600">Error: {error}</div>;
+  if (loading) return <div style={{padding: '40px', fontFamily: 'sans-serif'}}>Loading Seller Panel...</div>;
+  if (error) return <div style={{padding: '40px', fontFamily: 'sans-serif', color: 'red'}}>Error: {error}</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Seller Panel</h1>
+    <div style={{minHeight: '100vh', backgroundColor: '#f9fafb', padding: '16px', fontFamily: 'sans-serif'}}>
+      <div style={{maxWidth: '1280px', margin: '0 auto'}}>
+        <h1 style={{fontSize: '30px', fontWeight: 'bold', marginBottom: '24px'}}>Seller Panel</h1>
         
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b">
+        <div style={{display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid #e5e7eb'}}>
           <button
             onClick={() => setActiveTab('active')}
-            className={`px-6 py-3 font-medium ${
-              activeTab === 'active'
-               ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            style={{
+              padding: '12px 24px',
+              fontWeight: '500',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              borderBottom: activeTab === 'active'? '2px solid #2563eb' : 'none',
+              color: activeTab === 'active'? '#2563eb' : '#4b5563'
+            }}
           >
             Active Orders ({activeTab === 'active'? orders.length : '...'})
           </button>
           <button
             onClick={() => setActiveTab('archived')}
-            className={`px-6 py-3 font-medium ${
-              activeTab === 'archived'
-               ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
+            style={{
+              padding: '12px 24px',
+              fontWeight: '500',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              borderBottom: activeTab === 'archived'? '2px solid #2563eb' : 'none',
+              color: activeTab === 'archived'? '#2563eb' : '#4b5563'
+            }}
           >
             Archived Orders ({activeTab === 'archived'? orders.length : '...'})
           </button>
         </div>
 
-        {/* Bulk Actions */}
         {orders.length > 0 && (
-          <div className="mb-4 flex items-center gap-4 bg-white p-4 rounded-lg shadow">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div style={{marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '16px', backgroundColor: 'white', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)'}}>
+            <label style={{display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer'}}>
               <input
                 type="checkbox"
                 checked={selectedOrders.size === orders.length && orders.length > 0}
                 onChange={selectAll}
-                className="w-4 h-4"
               />
-              <span className="text-sm">Select All</span>
+              <span style={{fontSize: '14px'}}>Select All</span>
             </label>
             
             {selectedOrders.size > 0 && (
               <>
-                <span className="text-sm text-gray-600">
-                  {selectedOrders.size} selected
-                </span>
-                {activeTab === 'active'? (
-                  <button
-                    onClick={() => bulkArchive(true)}
-                    className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 text-sm"
-                  >
-                    Archive Selected
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => bulkArchive(false)}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-                  >
-                    Unarchive Selected
-                  </button>
-                )}
+                <span style={{fontSize: '14px', color: '#4b5563'}}>{selectedOrders.size} selected</span>
+                <button
+                  onClick={() => bulkArchive(activeTab === 'active')}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: activeTab === 'active'? '#ea580c' : '#16a34a',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  {activeTab === 'active'? 'Archive Selected' : 'Unarchive Selected'}
+                </button>
               </>
             )}
           </div>
         )}
 
-        {/* Orders List */}
         {orders.length === 0? (
-          <div className="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+          <div style={{backgroundColor: 'white', borderRadius: '8px', padding: '32px', textAlign: 'center', color: '#6b7280'}}>
             No {activeTab} orders found
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div style={{display: 'grid', gap: '16px'}}>
             {orders.map((order) => (
-              <div
-                key={order.id}
-                className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500"
-              >
-                <div className="flex items-start gap-4">
+              <div key={order.id} style={{backgroundColor: 'white', borderRadius: '8px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', borderLeft: '4px solid #3b82f6'}}>
+                <div style={{display: 'flex', alignItems: 'start', gap: '16px'}}>
                   <input
                     type="checkbox"
                     checked={selectedOrders.has(order.id)}
                     onChange={() => toggleSelectOrder(order.id)}
-                    className="mt-1 w-4 h-4"
+                    style={{marginTop: '4px'}}
                   />
                   
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start mb-3">
+                  <div style={{flex: 1}}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '12px'}}>
                       <div>
-                        <h3 className="font-bold text-lg">Order #{order.id}</h3>
-                        <p className="text-sm text-gray-600">
+                        <h3 style={{fontWeight: 'bold', fontSize: '18px', margin: 0}}>Order #{order.id}</h3>
+                        <p style={{fontSize: '14px', color: '#4b5563', margin: '4px 0 0 0'}}>
                           {new Date(order.created_at).toLocaleString()}
                         </p>
                         {order.is_archived && order.archived_at && (
-                          <p className="text-xs text-orange-600 mt-1">
+                          <p style={{fontSize: '12px', color: '#ea580c', margin: '4px 0 0 0'}}>
                             Archived: {new Date(order.archived_at).toLocaleString()}
                           </p>
                         )}
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-green-600">
+                      <div style={{textAlign: 'right'}}>
+                        <div style={{fontSize: '24px', fontWeight: 'bold', color: '#16a34a'}}>
                           ₱{order.total_amount || 0}
                         </div>
-                        <div className={`text-xs px-2 py-1 rounded inline-block mt-1 ${
-                          order.status === 'completed' 
-                           ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
+                        <div style={{
+                          fontSize: '12px',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          display: 'inline-block',
+                          marginTop: '4px',
+                          backgroundColor: order.status === 'completed'? '#dcfce7' : '#fef3c7',
+                          color: order.status === 'completed'? '#166534' : '#854d0e'
+                        }}>
                           {order.status || 'pending'}
                         </div>
                       </div>
                     </div>
 
-                    {/* Items from itemlist2 */}
-                    <div className="mt-3 pt-3 border-t">
-                      <div className="text-sm font-semibold mb-2">Items:</div>
+                    <div style={{marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb'}}>
+                      <div style={{fontSize: '14px', fontWeight: '600', marginBottom: '8px'}}>Items:</div>
                       {order.itemlist2 && order.itemlist2.length > 0? (
-                        <div className="space-y-1">
+                        <div>
                           {order.itemlist2.map((item, idx) => (
-                            <div key={idx} className="text-sm text-gray-700 flex justify-between">
+                            <div key={idx} style={{fontSize: '14px', color: '#374151', display: 'flex', justifyContent: 'space-between', marginBottom: '4px'}}>
                               <span>Item ID: {item.menu_item_id} × {item.quantity}</span>
-                              <span className="font-medium">₱{item.price}</span>
+                              <span style={{fontWeight: '500'}}>₱{item.price}</span>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="text-sm text-gray-400">No items</div>
+                        <div style={{fontSize: '14px', color: '#9ca3af'}}>No items</div>
                       )}
                     </div>
 
-                    {/* Customer Info */}
                     {order.customer_name && (
-                      <div className="mt-3 pt-3 border-t text-sm">
-                        <div><span className="font-semibold">Customer:</span> {order.customer_name}</div>
-                        {order.customer_phone && <div><span className="font-semibold">Phone:</span> {order.customer_phone}</div>}
-                        {order.customer_address && <div><span className="font-semibold">Address:</span> {order.customer_address}</div>}
+                      <div style={{marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e5e7eb', fontSize: '14px'}}>
+                        <div><span style={{fontWeight: '600'}}>Customer:</span> {order.customer_name}</div>
+                        {order.customer_phone && <div><span style={{fontWeight: '600'}}>Phone:</span> {order.customer_phone}</div>}
+                        {order.customer_address && <div><span style={{fontWeight: '600'}}>Address:</span> {order.customer_address}</div>}
                       </div>
                     )}
                   </div>
