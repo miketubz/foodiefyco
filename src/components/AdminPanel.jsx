@@ -1,168 +1,83 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import { useOrdersExport } from '../hooks/useOrdersExport';
 import { generateOrdersCSV, downloadCSV } from '../utils/csvExport';
-
-const formatDateInput = (date) => {
-  const year = date.getFullYear();
-  const month = `${date.getMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getDate()}`.padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-const toIsoStart = (date) => new Date(`${date}T00:00:00`).toISOString();
-const toIsoNextDay = (date) => {
-  const d = new Date(`${date}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString();
-};
-
-const normalizeSource = (value) => {
-  const source = String(value || '').trim().toLowerCase();
-  if (!source || source === 'website' || source === 'internal') return 'internal';
-  if (source === 'external') return 'external';
-  return source;
-};
-
-const getPublicProofUrl = (path) => {
-  if (!path) return '';
-  if (/^https?:\/\//i.test(path)) return path;
-  return supabase.storage.from('payment-proofs').getPublicUrl(path).data?.publicUrl || '';
-};
-
-const normalizeText = (value, fallback = 'N/A') => {
-  if (value === null || value === undefined) return fallback;
-  const text = String(value).trim();
-  return text ? text : fallback;
-};
+import { supabase } from '../lib/supabaseClient';
 
 export const AdminPanel = () => {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const { orders, loading, error, fetchOrdersForExport } = useOrdersExport();
+
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
     status: 'all',
     paymentStatus: 'all',
-    source: 'all',
+    orderSource: 'all',
   });
   const [savingOrderId, setSavingOrderId] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [actionError, setActionError] = useState('');
+  const [clearingCompleted, setClearingCompleted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [todaySummary, setTodaySummary] = useState({ orders: 0, sales: 0 });
 
-  const fetchOrders = async (activeFilters = filters) => {
-    setLoading(true);
-    setError('');
-    setActionError('');
-    setSuccessMessage('');
+  const formatDateInput = (date) => {
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, '0');
+    const day = `${date.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
-    try {
-      let query = supabase
-        .from('orders')
-        .select('id, created_at, total_amount, status, payment_status, promo_code, discount_amount, order_source, payment_proof_option, payment_proof_path, customer_name, phone_number, delivery_address, special_instructions, payment_method')
-        .order('created_at', { ascending: false });
+  const getTodayBounds = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    return { start: start.toISOString(), end: end.toISOString() };
+  };
 
-      if (activeFilters.startDate) query = query.gte('created_at', toIsoStart(activeFilters.startDate));
-      if (activeFilters.endDate) query = query.lt('created_at', toIsoNextDay(activeFilters.endDate));
-      if (activeFilters.status !== 'all') query = query.eq('status', activeFilters.status);
-      if (activeFilters.paymentStatus !== 'all') query = query.eq('payment_status', activeFilters.paymentStatus);
-      if (activeFilters.source !== 'all') {
-        if (activeFilters.source === 'external') {
-          query = query.eq('order_source', 'external');
-        } else {
-          query = query.or('order_source.is.null,order_source.eq.internal,order_source.eq.website');
-        }
-      }
+  const fetchTodaySummary = async () => {
+    const { start, end } = getTodayBounds();
+    const { data, error: summaryError } = await supabase
+      .from('orders')
+      .select('id, total_amount, status')
+      .gte('created_at', start)
+      .lte('created_at', end);
 
-      const { data: ordersData, error: ordersError } = await query;
-      if (ordersError) throw ordersError;
+    if (summaryError) return;
 
-      const orderIds = (ordersData || []).map((o) => o.id);
-      let itemsByOrder = {};
+    const todayOrders = data || [];
+    const todaySales = todayOrders
+      .filter((order) => order.status !== 'cancelled')
+      .reduce((sum, order) => sum + Number(order.total_amount || 0), 0);
 
-      if (orderIds.length > 0) {
-        const { data: orderItemsData, error: itemsError } = await supabase
-          .from('order_items')
-          .select('order_id, quantity, price, menu_item_id')
-          .in('order_id', orderIds);
-
-        if (itemsError) throw itemsError;
-
-        const menuItemIds = [...new Set((orderItemsData || []).map((i) => i.menu_item_id).filter(Boolean))];
-        let menuMap = {};
-
-        if (menuItemIds.length > 0) {
-          const { data: menuItemsData, error: menuError } = await supabase
-            .from('menu_item')
-            .select('id, name')
-            .in('id', menuItemIds);
-
-          if (menuError) throw menuError;
-          menuMap = Object.fromEntries((menuItemsData || []).map((m) => [m.id, m.name]));
-        }
-
-        itemsByOrder = (orderItemsData || []).reduce((acc, item) => {
-          const mapped = {
-            name: menuMap[item.menu_item_id] || 'Unknown Item',
-            quantity: Number(item.quantity || 0),
-            price: Number(item.price || 0),
-            subtotal: Number(item.quantity || 0) * Number(item.price || 0),
-          };
-          if (!acc[item.order_id]) acc[item.order_id] = [];
-          acc[item.order_id].push(mapped);
-          return acc;
-        }, {});
-      }
-
-      const normalized = (ordersData || []).map((order) => {
-        const orderItems = itemsByOrder[order.id] || [];
-        const paymentProofPath = order.payment_proof_path || '';
-
-        return {
-          orderId: order.id,
-          id: order.id,
-          createdAt: order.created_at,
-          orderDate: order.created_at ? new Date(order.created_at).toLocaleString() : 'N/A',
-          customerName: normalizeText(order.customer_name),
-          phoneNumber: normalizeText(order.phone_number),
-          deliveryAddress: normalizeText(order.delivery_address),
-          specialInstructions: normalizeText(order.special_instructions, 'None'),
-          paymentMethod: normalizeText(order.payment_method, 'N/A'),
-          paymentStatus: String(order.payment_status || 'unpaid').toLowerCase(),
-          orderSource: normalizeSource(order.order_source),
-          promoCode: order.promo_code || '',
-          discountAmount: Number(order.discount_amount || 0),
-          totalAmount: Number(order.total_amount || 0),
-          paymentProofOption: order.payment_proof_option || '',
-          paymentProofPath,
-          paymentProofUrl: getPublicProofUrl(paymentProofPath),
-          status: String(order.status || 'pending').toLowerCase(),
-          orderItems,
-          itemCount: orderItems.reduce((sum, item) => sum + item.quantity, 0),
-          itemsSummary: orderItems.length ? orderItems.map((item) => `${item.name} x${item.quantity}`).join(', ') : 'No items',
-        };
-      });
-
-      setOrders(normalized);
-    } catch (err) {
-      setOrders([]);
-      setError(err?.message || 'Failed to fetch orders');
-    } finally {
-      setLoading(false);
-    }
+    setTodaySummary({ orders: todayOrders.length, sales: todaySales });
   };
 
   useEffect(() => {
-    fetchOrders(filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchTodaySummary();
   }, []);
 
+  const runFetch = async (nextFilters) => {
+    setActionError('');
+    setSuccessMessage('');
+
+    await fetchOrdersForExport({
+      startDate: nextFilters.startDate || undefined,
+      endDate: nextFilters.endDate || undefined,
+      status: nextFilters.status === 'all' ? undefined : nextFilters.status,
+      paymentStatus:
+        nextFilters.paymentStatus === 'all' ? undefined : nextFilters.paymentStatus,
+      orderSource:
+        nextFilters.orderSource === 'all' ? undefined : nextFilters.orderSource,
+    });
+
+    await fetchTodaySummary();
+  };
+
   const handleFetchOrders = async () => {
-    await fetchOrders(filters);
+    await runFetch(filters);
   };
 
   const handleQuickRange = async (type) => {
@@ -173,84 +88,266 @@ export const AdminPanel = () => {
     if (type === 'today') {
       startDate = formatDateInput(now);
       endDate = formatDateInput(now);
-    } else if (type === 'yesterday') {
+    }
+    if (type === 'yesterday') {
       const yesterday = new Date(now);
       yesterday.setDate(now.getDate() - 1);
       startDate = formatDateInput(yesterday);
       endDate = formatDateInput(yesterday);
-    } else if (type === 'last7') {
+    }
+    if (type === 'last7') {
       const start = new Date(now);
       start.setDate(now.getDate() - 6);
       startDate = formatDateInput(start);
       endDate = formatDateInput(now);
-    } else if (type === 'thisMonth') {
+    }
+    if (type === 'thisMonth') {
       const start = new Date(now.getFullYear(), now.getMonth(), 1);
       startDate = formatDateInput(start);
       endDate = formatDateInput(now);
     }
+    if (type === 'all') {
+      startDate = '';
+      endDate = '';
+    }
 
     const nextFilters = { ...filters, startDate, endDate };
-    if (type === 'all') {
-      nextFilters.startDate = '';
-      nextFilters.endDate = '';
-    }
     setFilters(nextFilters);
-    await fetchOrders(nextFilters);
-  };
-
-  const handleStatusChange = async (orderId, newStatus) => {
-    setSavingOrderId(orderId);
-    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
-    setSavingOrderId(null);
-    if (error) return setActionError(error.message);
-    setSuccessMessage('Order status updated.');
-    await fetchOrders(filters);
-  };
-
-  const handlePaymentStatusChange = async (orderId, newPaymentStatus) => {
-    setSavingOrderId(orderId);
-    const { error } = await supabase.from('orders').update({ payment_status: newPaymentStatus }).eq('id', orderId);
-    setSavingOrderId(null);
-    if (error) return setActionError(error.message);
-    setSuccessMessage('Payment status updated.');
-    await fetchOrders(filters);
+    await runFetch(nextFilters);
   };
 
   const handleExportCSV = () => {
-    if (!orders.length) return;
-    const csvContent = generateOrdersCSV(orders);
+    if (orders.length === 0) {
+      alert('No orders to export');
+      return;
+    }
+    const csvContent = generateOrdersCSV(normalizedOrders);
     const timestamp = new Date().toISOString().split('T')[0];
     downloadCSV(csvContent, `orders_${timestamp}.csv`);
   };
 
+  const handleStatusChange = async (orderId, newStatus) => {
+    setSavingOrderId(orderId);
+    setActionError('');
+    setSuccessMessage('');
+
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ status: newStatus })
+      .eq('id', orderId);
+
+    if (updateError) {
+      setActionError(updateError.message);
+      setSavingOrderId(null);
+      return;
+    }
+
+    await handleFetchOrders();
+    setSavingOrderId(null);
+    setSuccessMessage(`Order status updated to ${newStatus}.`);
+  };
+
+  const handlePaymentStatusChange = async (orderId, newPaymentStatus) => {
+    setSavingOrderId(orderId);
+    setActionError('');
+    setSuccessMessage('');
+
+    const { error: updateError } = await supabase
+      .from('orders')
+      .update({ payment_status: newPaymentStatus })
+      .eq('id', orderId);
+
+    if (updateError) {
+      setActionError(updateError.message);
+      setSavingOrderId(null);
+      return;
+    }
+
+    await handleFetchOrders();
+    setSavingOrderId(null);
+    setSuccessMessage(`Payment status updated to ${newPaymentStatus}.`);
+  };
+
+  const handleClearCompletedOrders = async () => {
+    const completedOrders = normalizedOrders.filter((order) => order.status === 'completed');
+    if (completedOrders.length === 0) {
+      alert('No completed orders to clear.');
+      return;
+    }
+
+    const confirmed = window.confirm('Clear all completed orders? This also removes uploaded proof files.');
+    if (!confirmed) return;
+
+    setClearingCompleted(true);
+    setActionError('');
+    setSuccessMessage('');
+
+    const proofPaths = completedOrders
+      .map((order) => order.paymentProofPath)
+      .filter(Boolean);
+
+    if (proofPaths.length > 0) {
+      await supabase.storage.from('payment-proofs').remove(proofPaths);
+    }
+
+    const ids = completedOrders.map((order) => order.orderId);
+    const { error: deleteError } = await supabase.from('orders').delete().in('id', ids);
+
+    if (deleteError) {
+      setActionError(deleteError.message);
+      setClearingCompleted(false);
+      return;
+    }
+
+    await handleFetchOrders();
+    setClearingCompleted(false);
+    setExpandedOrderId(null);
+    setSuccessMessage('Completed orders and uploaded proof files cleared.');
+  };
+
+  const handlePrintReceipt = (order) => {
+    const receiptWindow = window.open('', '_blank', 'width=800,height=900');
+    if (!receiptWindow) {
+      alert('Please allow popups to print the receipt.');
+      return;
+    }
+
+    const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+    const proofLabel =
+      order.paymentMethod === 'COD'
+        ? 'Not required'
+        : order.paymentProofOption === 'scan_on_delivery'
+        ? 'Scan upon delivery'
+        : order.paymentProofUrl
+        ? 'Uploaded'
+        : 'No upload yet';
+
+    const itemRows = (order.orderItems || [])
+      .map(
+        (item) => `
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${item.name || 'Item'}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity || 0}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">₱${Number(item.subtotal || 0).toFixed(2)}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    receiptWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt ${order.orderId}</title><meta charset="UTF-8" /></head><body style="font-family: Arial, sans-serif; padding: 24px; color: #111827;"><div style="max-width: 700px; margin: 0 auto;"><h1 style="margin-bottom: 8px;">FoodiefyCo Receipt</h1><p style="margin: 0 0 20px; color: #4b5563;">Order summary</p><div style="margin-bottom: 20px;"><p><strong>Order ID:</strong> ${order.orderId}</p><p><strong>Date Ordered:</strong> ${order.orderDate}</p><p><strong>Customer:</strong> ${order.customerName}</p><p><strong>Phone:</strong> ${order.phoneNumber}</p><p><strong>Address:</strong> ${order.deliveryAddress}</p><p><strong>Payment Method:</strong> ${order.paymentMethod || 'Not specified'}</p><p><strong>Payment Status:</strong> ${order.paymentStatus || 'unpaid'}</p><p><strong>Proof Option:</strong> ${proofLabel}</p><p><strong>Promo Code:</strong> ${order.promoCode || 'None'}</p><p><strong>Special Instructions:</strong> ${order.specialInstructions || 'None'}</p></div><table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;"><thead><tr style="background: #f3f4f6;"><th style="padding: 10px; text-align: left;">Item</th><th style="padding: 10px; text-align: center;">Qty</th><th style="padding: 10px; text-align: right;">Subtotal</th></tr></thead><tbody>${itemRows || '<tr><td colspan="3" style="padding: 10px;">No items found.</td></tr>'}</tbody></table><div style="margin-top: 20px; text-align: right;"><p><strong>Subtotal:</strong> ₱${subtotalBeforeDiscount.toFixed(2)}</p><p><strong>Discount:</strong> -₱${Number(order.discountAmount || 0).toFixed(2)}</p><p style="font-size: 18px;"><strong>Total: ₱${Number(order.totalAmount || 0).toFixed(2)}</strong></p></div></div><script>window.onload = function () { window.print(); };</script></body></html>`);
+    receiptWindow.document.close();
+  };
+
+  const handlePdfReceipt = (order) => handlePrintReceipt(order);
+
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    const { error: signOutError } = await supabase.auth.signOut();
+    if (signOutError) {
+      setActionError(signOutError.message);
+      return;
+    }
     navigate('/admin/login', { replace: true });
   };
 
+  const normalizedOrders = useMemo(() => {
+    return (orders || []).map((order) => {
+      const rawItems = Array.isArray(order.orderItems)
+        ? order.orderItems
+        : Array.isArray(order.order_items)
+        ? order.order_items
+        : Array.isArray(order.items)
+        ? order.items
+        : [];
+
+      const orderItems = rawItems.map((item) => {
+        const itemName = item?.name || item?.menu_item?.name || item?.menu_item || 'Item';
+        const quantity = Number(item?.quantity || 0);
+        const price = Number(item?.price || 0);
+        const subtotal = Number(item?.subtotal ?? quantity * price ?? 0);
+        return { ...item, name: itemName, quantity, price, subtotal };
+      });
+
+      const createdAt = order.createdAt || order.created_at || '';
+      const parsedDate = createdAt ? new Date(createdAt) : null;
+      const orderDate = order.orderDate || (parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toLocaleString() : 'N/A');
+
+      const orderSource = String(order.orderSource ?? order.order_source ?? 'internal').trim().toLowerCase() === 'external' ? 'external' : 'internal';
+      const paymentMethod = String(order.paymentMethod ?? order.payment_method ?? 'N/A') || 'N/A';
+      const paymentStatus = String(order.paymentStatus ?? order.payment_status ?? 'unpaid').toLowerCase();
+      const paymentProofOption = order.paymentProofOption ?? order.payment_proof_option ?? '';
+      const paymentProofPath = order.paymentProofPath ?? order.payment_proof_path ?? '';
+      const paymentProofUrl = order.paymentProofUrl || paymentProofPath || '';
+      const specialInstructions = String(order.specialInstructions ?? order.special_instructions ?? '').trim();
+      const promoCode = order.promoCode ?? order.promo_code ?? '';
+      const discountAmount = Number(order.discountAmount ?? order.discount_amount ?? 0);
+      const totalAmount = Number(order.totalAmount ?? order.total_amount ?? 0);
+      const status = String(order.status || 'pending').toLowerCase();
+      const customerName = order.customerName ?? order.customer_name ?? 'N/A';
+      const phoneNumber = order.phoneNumber ?? order.phone_number ?? 'N/A';
+      const deliveryAddress = order.deliveryAddress ?? order.delivery_address ?? 'N/A';
+      const itemCount = order.itemCount ?? orderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      const itemsSummary = order.itemsSummary || orderItems.map((item) => `${item.name} x${item.quantity}`).join(', ') || 'No items';
+
+      return {
+        ...order,
+        orderId: order.orderId ?? order.id,
+        createdAt,
+        orderDate,
+        customerName,
+        phoneNumber,
+        deliveryAddress,
+        paymentMethod,
+        paymentStatus,
+        paymentProofOption,
+        paymentProofPath,
+        paymentProofUrl,
+        promoCode,
+        discountAmount,
+        totalAmount,
+        orderSource,
+        specialInstructions: specialInstructions || 'None',
+        status,
+        orderItems,
+        itemCount,
+        itemsSummary,
+      };
+    });
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return orders;
-    return orders.filter((order) => [
-      order.orderDate,
-      order.customerName,
-      order.phoneNumber,
-      order.deliveryAddress,
-      order.paymentMethod,
-      order.paymentStatus,
-      order.orderSource,
-      order.specialInstructions,
-      order.promoCode,
-      order.itemsSummary,
-    ].join(' ').toLowerCase().includes(term));
-  }, [orders, searchTerm]);
+    return normalizedOrders.filter((order) => {
+      const matchesPaymentStatus = filters.paymentStatus === 'all' || order.paymentStatus === filters.paymentStatus;
+      const matchesOrderSource = filters.orderSource === 'all' || order.orderSource === filters.orderSource;
+      if (!matchesPaymentStatus || !matchesOrderSource) return false;
+      if (!term) return true;
+      return [order.orderId, order.orderDate, order.customerName, order.phoneNumber, order.deliveryAddress, order.paymentMethod, order.paymentStatus, order.promoCode, order.discountAmount, order.itemsSummary, order.specialInstructions, order.orderSource, order.status].join(' ').toLowerCase().includes(term);
+    });
+  }, [normalizedOrders, searchTerm, filters.paymentStatus, filters.orderSource]);
 
-  const renderProofText = (order) => {
-    if (order.paymentMethod === 'COD') return 'Not required';
-    if (order.paymentProofOption === 'scan_on_delivery') return 'Scan on delivery';
-    if (order.paymentProofUrl) return 'Uploaded';
-    return 'No upload yet';
-  };
+  const completedCount = useMemo(() => normalizedOrders.filter((order) => order.status === 'completed').length, [normalizedOrders]);
+  const rangeSummary = useMemo(() => {
+    const nonCancelledOrders = filteredOrders.filter((order) => order.status !== 'cancelled');
+    const totalSales = nonCancelledOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const byMethod = nonCancelledOrders.reduce((acc, order) => {
+      const method = order.paymentMethod || 'Unknown';
+      acc[method] = (acc[method] || 0) + Number(order.totalAmount || 0);
+      return acc;
+    }, {});
+    return { orders: filteredOrders.length, sales: totalSales, cod: byMethod.COD || 0, gcash: byMethod.GCASH || 0, gotyme: byMethod.GOtyme || 0, unionbank: byMethod.UnionBank || 0 };
+  }, [filteredOrders]);
+
+  const rangeLabel = useMemo(() => {
+    if (filters.startDate && filters.endDate) return `${filters.startDate} to ${filters.endDate}`;
+    if (filters.startDate) return `From ${filters.startDate}`;
+    if (filters.endDate) return `Until ${filters.endDate}`;
+    return 'Current View';
+  }, [filters.endDate, filters.startDate]);
+
+  const getStatusClasses = (status) => status === 'completed' ? 'bg-green-100 text-green-800' : status === 'pending' ? 'bg-yellow-100 text-yellow-800' : status === 'cancelled' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-700';
+  const getPaymentStatusClasses = (paymentStatus) => paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : paymentStatus === 'unpaid' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700';
+  const getOrderSourceClasses = (orderSource) => orderSource === 'external' ? 'bg-violet-100 text-violet-800' : 'bg-sky-100 text-sky-800';
+  const renderProofText = (order) => order.paymentMethod === 'COD' ? 'Not required' : order.paymentProofOption === 'scan_on_delivery' ? 'Scan on delivery' : order.paymentProofUrl ? 'Uploaded' : 'No upload yet';
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
@@ -268,123 +365,55 @@ export const AdminPanel = () => {
         <div className="mb-6 rounded-lg bg-white p-6 shadow">
           <h2 className="mb-4 text-xl font-semibold text-gray-800">Fetch Orders</h2>
           <div className="mb-4 flex flex-wrap gap-2">
-            <button onClick={() => handleQuickRange('today')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Today</button>
-            <button onClick={() => handleQuickRange('yesterday')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Yesterday</button>
-            <button onClick={() => handleQuickRange('last7')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Last 7 Days</button>
-            <button onClick={() => handleQuickRange('thisMonth')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">This Month</button>
-            <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">All Dates</button>
+            <button onClick={() => handleQuickRange('today')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Today</button>
+            <button onClick={() => handleQuickRange('yesterday')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Yesterday</button>
+            <button onClick={() => handleQuickRange('last7')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">Last 7 Days</button>
+            <button onClick={() => handleQuickRange('thisMonth')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">This Month</button>
+            <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200">All Dates</button>
           </div>
-
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-6">
-            <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2" />
-            <input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2" />
-            <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2">
-              <option value="all">All Status</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option>
-            </select>
-            <select value={filters.paymentStatus} onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2">
-              <option value="all">All Payment</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option>
-            </select>
-            <select value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2">
-              <option value="all">All Source</option><option value="internal">Internal</option><option value="external">External</option>
-            </select>
-            <button onClick={handleFetchOrders} disabled={loading} className="rounded-md bg-blue-600 px-4 py-2 text-white">{loading ? 'Loading...' : 'Fetch Orders'}</button>
+          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-5">
+            <div><label className="mb-2 block text-sm font-medium text-gray-700">Start Date</label><input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" /></div>
+            <div><label className="mb-2 block text-sm font-medium text-gray-700">End Date</label><input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2" /></div>
+            <div><label className="mb-2 block text-sm font-medium text-gray-700">Status</label><select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2"><option value="all">All</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div>
+            <div><label className="mb-2 block text-sm font-medium text-gray-700">Payment Status</label><select value={filters.paymentStatus} onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2"><option value="all">All</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select></div>
+            <div><label className="mb-2 block text-sm font-medium text-gray-700">Order Source</label><select value={filters.orderSource} onChange={(e) => setFilters({ ...filters, orderSource: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2"><option value="all">All</option><option value="internal">Internal</option><option value="external">External</option></select></div>
+            <div className="flex items-end"><button onClick={handleFetchOrders} disabled={loading} className="w-full rounded-md bg-blue-600 px-4 py-2 text-white">{loading ? 'Loading...' : 'Fetch Orders'}</button></div>
           </div>
-          <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search orders" className="w-full rounded-md border border-gray-300 px-3 py-2" />
-          {(error || actionError) && <div className="mt-3 rounded border border-red-400 bg-red-100 p-3 text-red-700">{actionError || error}</div>}
+          {(error || actionError) && <div className="rounded border border-red-400 bg-red-100 p-3 text-red-700">{actionError || error}</div>}
           {successMessage && <div className="mt-3 rounded border border-green-400 bg-green-100 p-3 text-green-700">{successMessage}</div>}
         </div>
 
-        <div className="rounded-lg bg-white p-4 md:p-6 shadow">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-800">Orders ({filteredOrders.length})</h2>
-            <button onClick={handleExportCSV} className="rounded-md bg-green-600 px-4 py-2 text-white">Export CSV</button>
-          </div>
+        {normalizedOrders.length > 0 && (
+          <>
+            <div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold text-gray-900">Summary</h2><p className="text-sm text-gray-500">{rangeLabel}</p></div>
+            <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Orders Today</p><p className="mt-2 text-3xl font-bold text-gray-900">{todaySummary.orders}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Total Sales Today</p><p className="mt-2 text-3xl font-bold text-green-600">₱{todaySummary.sales.toFixed(2)}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Range Orders</p><p className="mt-2 text-3xl font-bold text-gray-900">{rangeSummary.orders}</p></div>
+              <div className="rounded-xl bg-white p-5 shadow"><p className="text-sm font-medium text-gray-500">Range Sales</p><p className="mt-2 text-3xl font-bold text-green-600">₱{rangeSummary.sales.toFixed(2)}</p></div>
+            </div>
 
-          <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[2200px] text-sm">
-              <thead className="border-b bg-gray-100">
-                <tr>
-                  <th className="px-4 py-3 text-left">Date Ordered</th>
-                  <th className="px-4 py-3 text-left">Customer Name</th>
-                  <th className="px-4 py-3 text-left">Phone Number</th>
-                  <th className="px-4 py-3 text-left">Delivery Address</th>
-                  <th className="px-4 py-3 text-left">Source</th>
-                  <th className="px-4 py-3 text-left">Payment</th>
-                  <th className="px-4 py-3 text-left">Payment Status</th>
-                  <th className="px-4 py-3 text-left">Proof</th>
-                  <th className="px-4 py-3 text-left">Special Instructions</th>
-                  <th className="px-4 py-3 text-left">Promo Code</th>
-                  <th className="px-4 py-3 text-right">Discount</th>
-                  <th className="px-4 py-3 text-left">Items</th>
-                  <th className="px-4 py-3 text-center">Item Count</th>
-                  <th className="px-4 py-3 text-right">Total Amount</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  <th className="px-4 py-3 text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.map((order) => {
-                  const isExpanded = expandedOrderId === order.orderId;
-                  return (
-                    <React.Fragment key={order.orderId}>
-                      <tr className="border-b align-top hover:bg-gray-50">
-                        <td className="px-4 py-3">{order.orderDate}</td>
-                        <td className="px-4 py-3">{order.customerName}</td>
-                        <td className="px-4 py-3">{order.phoneNumber}</td>
-                        <td className="px-4 py-3">{order.deliveryAddress}</td>
-                        <td className="px-4 py-3">{order.orderSource}</td>
-                        <td className="px-4 py-3">{order.paymentMethod}</td>
-                        <td className="px-4 py-3">
-                          <select value={order.paymentStatus} onChange={(e) => handlePaymentStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
-                            <option value="unpaid">Unpaid</option>
-                            <option value="paid">Paid</option>
-                          </select>
-                        </td>
-                        <td className="px-4 py-3">{renderProofText(order)}</td>
-                        <td className="px-4 py-3 max-w-[220px] whitespace-pre-wrap break-words">{order.specialInstructions}</td>
-                        <td className="px-4 py-3">{order.promoCode || 'None'}</td>
-                        <td className="px-4 py-3 text-right">-₱{Number(order.discountAmount || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3">{order.itemsSummary}</td>
-                        <td className="px-4 py-3 text-center">{order.itemCount}</td>
-                        <td className="px-4 py-3 text-right">₱{Number(order.totalAmount || 0).toFixed(2)}</td>
-                        <td className="px-4 py-3">
-                          <select value={order.status} onChange={(e) => handleStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
-                            <option value="pending">Pending</option>
-                            <option value="completed">Completed</option>
-                            <option value="cancelled">Cancelled</option>
-                          </select>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800">
-                            {isExpanded ? 'Hide' : 'View'}
-                          </button>
-                        </td>
-                      </tr>
-                      {isExpanded && (
-                        <tr className="border-b bg-gray-50">
-                          <td colSpan="16" className="px-6 py-4">
-                            <div className="rounded-lg border border-gray-200 bg-white p-4">
-                              <h3 className="mb-3 font-semibold text-gray-800">Ordered Items</h3>
-                              {order.orderItems.length > 0 ? order.orderItems.map((item, index) => (
-                                <div key={`${order.orderId}-${index}`} className="flex items-start justify-between border-b border-gray-100 pb-2">
-                                  <div>
-                                    <p className="font-medium text-gray-800">{item.name}</p>
-                                    <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                                  </div>
-                                  <p className="font-semibold text-gray-800">₱{Number(item.subtotal).toFixed(2)}</p>
-                                </div>
-                              )) : <p className="text-sm text-gray-500">No items found.</p>}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            <div className="rounded-lg bg-white p-4 md:p-6 shadow">
+              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div><h2 className="text-xl font-semibold text-gray-800">Orders ({filteredOrders.length})</h2></div>
+                <div className="flex flex-wrap gap-3"><button onClick={handleClearCompletedOrders} disabled={clearingCompleted || completedCount === 0} className="rounded-md bg-red-600 px-4 py-2 text-white disabled:bg-gray-400">{clearingCompleted ? 'Clearing...' : 'Clear Completed Orders'}</button><button onClick={handleExportCSV} className="rounded-md bg-green-600 px-4 py-2 text-white">Export CSV</button></div>
+              </div>
+              <div className="mb-4"><input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Search by customer, phone, address, order ID, item, payment, promo..." className="w-full rounded-md border border-gray-300 px-3 py-2" /></div>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[2050px] text-sm">
+                  <thead className="border-b bg-gray-100"><tr><th className="px-4 py-3 text-left">Date Ordered</th><th className="px-4 py-3 text-left">Customer Name</th><th className="px-4 py-3 text-left">Phone Number</th><th className="px-4 py-3 text-left">Delivery Address</th><th className="px-4 py-3 text-left">Payment</th><th className="px-4 py-3 text-left">Source</th><th className="px-4 py-3 text-left">Payment Status</th><th className="px-4 py-3 text-left">Proof</th><th className="px-4 py-3 text-left">Special Instructions</th><th className="px-4 py-3 text-left">Promo Code</th><th className="px-4 py-3 text-right">Discount</th><th className="px-4 py-3 text-left">Items</th><th className="px-4 py-3 text-center">Item Count</th><th className="px-4 py-3 text-right">Total Amount</th><th className="px-4 py-3 text-left">Status</th><th className="px-4 py-3 text-center">Actions</th></tr></thead>
+                  <tbody>
+                    {filteredOrders.length === 0 ? <tr><td colSpan="16" className="px-4 py-6 text-center text-gray-500">No orders matched your search.</td></tr> : filteredOrders.map((order) => {
+                      const isExpanded = expandedOrderId === order.orderId;
+                      const subtotalBeforeDiscount = Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+                      return <React.Fragment key={order.orderId}><tr className="border-b align-top hover:bg-gray-50"><td className="px-4 py-3">{order.orderDate}</td><td className="px-4 py-3">{order.customerName}</td><td className="px-4 py-3">{order.phoneNumber}</td><td className="px-4 py-3">{order.deliveryAddress}</td><td className="px-4 py-3">{order.paymentMethod}</td><td className="px-4 py-3"><span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getOrderSourceClasses(order.orderSource)}`}>{order.orderSource}</span></td><td className="px-4 py-3"><div className="flex flex-col gap-2"><span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getPaymentStatusClasses(order.paymentStatus)}`}>{order.paymentStatus}</span><select value={order.paymentStatus} onChange={(e) => handlePaymentStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2"><option value="unpaid">Unpaid</option><option value="paid">Paid</option></select></div></td><td className="px-4 py-3"><div className="flex flex-col gap-2"><span>{renderProofText(order)}</span>{order.paymentProofUrl && <a href={order.paymentProofUrl} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline">View Proof</a>}</div></td><td className="px-4 py-3 max-w-[220px]"><p className="whitespace-pre-wrap break-words text-sm text-gray-700">{order.specialInstructions}</p></td><td className="px-4 py-3">{order.promoCode || 'None'}</td><td className="px-4 py-3 text-right">-₱{Number(order.discountAmount || 0).toFixed(2)}</td><td className="px-4 py-3">{order.itemsSummary}</td><td className="px-4 py-3 text-center">{order.itemCount}</td><td className="px-4 py-3 text-right font-semibold">₱{Number(order.totalAmount || 0).toFixed(2)}</td><td className="px-4 py-3"><div className="flex flex-col gap-2"><span className={`inline-block rounded px-2 py-1 text-xs font-semibold ${getStatusClasses(order.status)}`}>{order.status}</span><select value={order.status} onChange={(e) => handleStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2"><option value="pending">Pending</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select></div></td><td className="px-4 py-3 text-center"><div className="flex flex-col gap-2"><button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800">{isExpanded ? 'Hide' : 'View'}</button><button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">Print</button><button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-purple-600 px-3 py-2 text-white hover:bg-purple-700">PDF</button></div></td></tr>{isExpanded && <tr className="border-b bg-gray-50"><td colSpan="16" className="px-6 py-4"><div className="grid gap-4 md:grid-cols-2"><div className="rounded-lg border border-gray-200 bg-white p-4"><h3 className="mb-3 font-semibold text-gray-800">Order Details</h3><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Order ID:</span> {order.orderId}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Date Ordered:</span> {order.orderDate}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Customer:</span> {order.customerName}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Phone:</span> {order.phoneNumber}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Address:</span> {order.deliveryAddress}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Method:</span> {order.paymentMethod}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Source:</span> {order.orderSource}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Payment Status:</span> {order.paymentStatus}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Proof:</span> {renderProofText(order)}</p>{order.paymentProofUrl && <p className="mb-2 text-sm text-gray-700"><a href={order.paymentProofUrl} target="_blank" rel="noreferrer" className="font-semibold text-blue-600 underline">View Proof Image</a></p>}<p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Subtotal:</span> ₱{subtotalBeforeDiscount.toFixed(2)}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Discount:</span> -₱{Number(order.discountAmount || 0).toFixed(2)}</p><p className="mb-2 text-sm text-gray-700"><span className="font-semibold">Total:</span> ₱{Number(order.totalAmount || 0).toFixed(2)}</p><p className="text-sm text-gray-700"><span className="font-semibold">Special Instructions:</span> {order.specialInstructions}</p></div><div className="rounded-lg border border-gray-200 bg-white p-4"><h3 className="mb-3 font-semibold text-gray-800">Ordered Items</h3>{order.orderItems.length > 0 ? <div className="space-y-3">{order.orderItems.map((item, index) => <div key={`${order.orderId}-${index}`} className="flex items-start justify-between border-b border-gray-100 pb-2"><div><p className="font-medium text-gray-800">{item.name}</p><p className="text-sm text-gray-500">Quantity: {item.quantity}</p></div><p className="font-semibold text-gray-800">₱{Number(item.subtotal).toFixed(2)}</p></div>)}</div> : <p className="text-sm text-gray-500">No items found.</p>}</div></div></td></tr>}</React.Fragment>;
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
