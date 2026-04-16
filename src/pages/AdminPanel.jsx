@@ -19,6 +19,7 @@ const AdminPanel = () => {
       setLoading(true);
       setError(null);
       
+      console.log('Fetching orders...');
       const { data, error } = await supabase
         .from('orders')
         .select('*')
@@ -27,19 +28,18 @@ const AdminPanel = () => {
 
       if (error) {
         console.error('Supabase query error:', error);
-        setError(`Database error: ${error.message}`);
+        setError(`Database error: ${error.message}. Check if 'is_archived' column exists.`);
         setOrders([]);
         return;
       }
 
-      // Extra safety: filter out any null/invalid rows
+      console.log('Raw data from Supabase:', data);
       const safeOrders = (data || []).filter(order => order && typeof order === 'object' && order.id);
       setOrders(safeOrders);
-      console.log('Loaded orders:', safeOrders.length);
       
     } catch (err) {
       console.error('Fetch crashed:', err);
-      setError('App crashed while loading orders. Check console.');
+      setError(`App crashed: ${err.message}`);
       setOrders([]);
     } finally {
       setLoading(false);
@@ -122,9 +122,9 @@ const AdminPanel = () => {
           <h2 className="font-bold text-lg mb-2">Error Loading Orders</h2>
           <p className="mb-3">{error}</p>
           <div className="text-sm bg-red-100 p-3 rounded">
-            <p className="font-semibold mb-1">To fix this:</p>
-            <p>1. Check if `is_archived` column exists in Supabase orders table</p>
-            <p>2. Make sure RLS is disabled: <code>ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;</code></p>
+            <p className="font-semibold mb-1">Most likely causes:</p>
+            <p>1. Column 'is_archived' doesn't exist - run the SQL migration</p>
+            <p>2. RLS is still blocking - run: <code>ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;</code></p>
             <p>3. Check browser console for more details</p>
           </div>
           <button 
@@ -176,7 +176,7 @@ const AdminPanel = () => {
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <p className="text-gray-500 text-lg mb-2">No active orders found</p>
             <p className="text-gray-400 text-sm">
-              All orders may be archived, or check if `is_archived` column exists
+              All orders may be archived, or check if 'is_archived' column exists in Supabase
             </p>
           </div>
         ) : (
@@ -215,7 +215,7 @@ const AdminPanel = () => {
                         />
                       </td>
                       <td className="p-3 text-xs font-mono text-gray-600">
-                        {order.id ? order.id.substring(0, 8) : 'N/A'}
+                        {order.id ? String(order.id).substring(0, 8) : 'N/A'}
                       </td>
                       <td className="p-3 text-sm text-gray-800">
                         {order.customer_name || 'N/A'}
