@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { SUPABASE_URL, BUCKET_PAYMENT_PROOFS, QR_LINKS, getPaymentProofUrl } from '../config/supabase';
+import { QR_LINKS, getPaymentProofUrl } from '../config/supabase';
 
 const AdminPanel = () => {
   const [orders, setOrders] = useState([]);
@@ -26,19 +26,20 @@ const AdminPanel = () => {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Supabase error:', error);
-        setError(`Database error: ${error.message}. Check RLS policies.`);
+        console.error('Supabase query error:', error);
+        setError(`Database error: ${error.message}`);
         setOrders([]);
         return;
       }
 
-      // Filter out null/invalid orders and ensure required fields exist
-      const validOrders = (data || []).filter(order => order && order.id);
-      setOrders(validOrders);
+      // Extra safety: filter out any null/invalid rows
+      const safeOrders = (data || []).filter(order => order && typeof order === 'object' && order.id);
+      setOrders(safeOrders);
+      console.log('Loaded orders:', safeOrders.length);
       
     } catch (err) {
-      console.error('Fetch failed:', err);
-      setError('Failed to load orders. Check console for details.');
+      console.error('Fetch crashed:', err);
+      setError('App crashed while loading orders. Check console.');
       setOrders([]);
     } finally {
       setLoading(false);
@@ -54,21 +55,25 @@ const AdminPanel = () => {
     try {
       const { error } = await supabase
         .from('orders')
-        .update({ is_archived: true, archived_at: new Date().toISOString() })
+        .update({ 
+          is_archived: true, 
+          archived_at: new Date().toISOString() 
+        })
         .in('id', selectedOrders);
 
       if (error) throw error;
       
-      alert(`${selectedOrders.length} orders archived`);
+      alert(`Archived ${selectedOrders.length} order(s)`);
       setSelectedOrders([]);
       fetchOrders();
     } catch (err) {
       console.error('Archive error:', err);
-      alert('Failed to archive orders: ' + err.message);
+      alert('Failed to archive: ' + err.message);
     }
   };
 
   const toggleSelectOrder = (orderId) => {
+    if (!orderId) return;
     setSelectedOrders(prev => 
       prev.includes(orderId) 
         ? prev.filter(id => id !== orderId)
@@ -77,151 +82,197 @@ const AdminPanel = () => {
   };
 
   const toggleSelectAll = () => {
-    if (selectedOrders.length === orders.length) {
+    if (selectedOrders.length === orders.length && orders.length > 0) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(orders.map(order => order.id));
+      setSelectedOrders(orders.map(o => o.id).filter(Boolean));
+    }
+  };
+
+  const formatCurrency = (amount) => {
+    const num = parseFloat(amount);
+    return isNaN(num) ? '₱0.00' : `₱${num.toFixed(2)}`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return 'Invalid Date';
     }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-xl">Loading orders...</div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-xl text-gray-600">Loading orders...</div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen p-4">
-        <div className="bg-red-100 border-red-400 text-red-700 px-4 py-3 rounded max-w-2xl">
-          <strong className="font-bold">Error: </strong>
-          <span className="block sm:inline">{error}</span>
-          <div className="mt-2 text-sm">
-            <p>Common fixes:</p>
-            <p>1. Run this SQL in Supabase: <code>ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;</code></p>
-            <p>2. Make sure you ran the SQL migration for is_archived column</p>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div className="bg-red-50 border border-red-400 text-red-700 px-6 py-4 rounded-lg max-w-2xl">
+          <h2 className="font-bold text-lg mb-2">Error Loading Orders</h2>
+          <p className="mb-3">{error}</p>
+          <div className="text-sm bg-red-100 p-3 rounded">
+            <p className="font-semibold mb-1">To fix this:</p>
+            <p>1. Check if `is_archived` column exists in Supabase orders table</p>
+            <p>2. Make sure RLS is disabled: <code>ALTER TABLE public.orders DISABLE ROW LEVEL SECURITY;</code></p>
+            <p>3. Check browser console for more details</p>
           </div>
+          <button 
+            onClick={fetchOrders}
+            className="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Admin Panel - Active Orders</h1>
-        <div className="space-x-2">
-          <button
-            onClick={() => navigate('/admin/archive')}
-            className="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-          >
-            View Archive
-          </button>
-          <button
-            onClick={() => navigate('/admin/profit')}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
-            Profit Calculator
-          </button>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+          <h1 className="text-3xl font-bold text-gray-800">Active Orders</h1>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => navigate('/admin/archive')}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition"
+            >
+              View Archive
+            </button>
+            <button
+              onClick={() => navigate('/admin/profit')}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition"
+            >
+              Profit Calculator
+            </button>
+          </div>
         </div>
-      </div>
 
-      <div className="mb-4">
-        <button
-          onClick={handleArchive}
-          disabled={selectedOrders.length === 0}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-          Archive Selected ({selectedOrders.length})
-        </button>
-      </div>
-
-      {orders.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          No active orders found. Check if RLS is blocking the query or if all orders are archived.
+        <div className="mb-4 flex items-center gap-4">
+          <button
+            onClick={handleArchive}
+            disabled={selectedOrders.length === 0}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+          >
+            Archive Selected ({selectedOrders.length})
+          </button>
+          <span className="text-gray-600 text-sm">
+            Total: {orders.length} orders
+          </span>
         </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-300">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-3 border">
-                  <input
-                    type="checkbox"
-                    checked={selectedOrders.length === orders.length && orders.length > 0}
-                    onChange={toggleSelectAll}
-                  />
-                </th>
-                <th className="p-3 border text-left">ID</th>
-                <th className="p-3 border text-left">Customer</th>
-                <th className="p-3 border text-left">Total</th>
-                <th className="p-3 border text-left">Payment</th>
-                <th className="p-3 border text-left">Status</th>
-                <th className="p-3 border text-left">Date</th>
-                <th className="p-3 border text-left">Proof</th>
-                <th className="p-3 border text-left">QR Code</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.map((order) => (
-                <tr key={order.id} className="hover:bg-gray-50">
-                  <td className="p-3 border text-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedOrders.includes(order.id)}
-                      onChange={() => toggleSelectOrder(order.id)}
-                    />
-                  </td>
-                  <td className="p-3 border text-xs">{order.id ? order.id.substring(0, 8) : 'N/A'}</td>
-                  <td className="p-3 border">{order.customer_name || 'N/A'}</td>
-                  <td className="p-3 border">₱{parseFloat(order.total_amount || 0).toFixed(2)}</td>
-                  <td className="p-3 border">{order.payment_method || 'N/A'}</td>
-                  <td className="p-3 border">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      order.status === 'completed' ? 'bg-green-200 text-green-800' : 
-                      order.status === 'pending' ? 'bg-yellow-200 text-yellow-800' : 
-                      'bg-gray-200 text-gray-800'
-                    }`}>
-                      {order.status || 'unknown'}
-                    </span>
-                  </td>
-                  <td className="p-3 border text-sm">
-                    {order.created_at ? new Date(order.created_at).toLocaleDateString() : 'N/A'}
-                  </td>
-                  <td className="p-3 border">
-                    {order.payment_proof_path ? (
-                      <a
-                        href={getPaymentProofUrl(order.payment_proof_path)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline text-sm"
-                      >
-                        View
-                      </a>
-                    ) : (
-                      <span className="text-gray-400 text-sm">None</span>
-                    )}
-                  </td>
-                  <td className="p-3 border">
-                    {order.payment_method && QR_LINKS[order.payment_method] ? (
-                      <img
-                        src={QR_LINKS[order.payment_method]}
-                        alt={`${order.payment_method} QR`}
-                        className="w-16 h-16 object-contain"
-                        onError={(e) => { e.target.style.display = 'none'; }}
+
+        {orders.length === 0 ? (
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <p className="text-gray-500 text-lg mb-2">No active orders found</p>
+            <p className="text-gray-400 text-sm">
+              All orders may be archived, or check if `is_archived` column exists
+            </p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="p-3 text-left">
+                      <input
+                        type="checkbox"
+                        checked={selectedOrders.length === orders.length && orders.length > 0}
+                        onChange={toggleSelectAll}
+                        className="w-4 h-4"
                       />
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                    </th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">ID</th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">Customer</th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">Total</th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">Payment</th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">Status</th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">Date</th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">Proof</th>
+                    <th className="p-3 text-left text-xs font-medium text-gray-600 uppercase">QR</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {orders.map((order) => (
+                    <tr key={order.id || Math.random()} className="hover:bg-gray-50">
+                      <td className="p-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrders.includes(order.id)}
+                          onChange={() => toggleSelectOrder(order.id)}
+                          className="w-4 h-4"
+                        />
+                      </td>
+                      <td className="p-3 text-xs font-mono text-gray-600">
+                        {order.id ? order.id.substring(0, 8) : 'N/A'}
+                      </td>
+                      <td className="p-3 text-sm text-gray-800">
+                        {order.customer_name || 'N/A'}
+                      </td>
+                      <td className="p-3 text-sm font-semibold text-gray-800">
+                        {formatCurrency(order.total_amount)}
+                      </td>
+                      <td className="p-3 text-sm text-gray-600">
+                        {order.payment_method || 'N/A'}
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          order.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                          order.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 
+                          order.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {order.status || 'unknown'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-sm text-gray-600">
+                        {formatDate(order.created_at)}
+                      </td>
+                      <td className="p-3">
+                        {order.payment_proof_path ? (
+                          <a
+                            href={getPaymentProofUrl(order.payment_proof_path)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline text-sm"
+                          >
+                            View
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-sm">None</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {order.payment_method && QR_LINKS[order.payment_method] ? (
+                          <img
+                            src={QR_LINKS[order.payment_method]}
+                            alt={`${order.payment_method} QR`}
+                            className="w-12 h-12 object-contain"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <span className="text-gray-400 text-sm">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
