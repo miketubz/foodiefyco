@@ -956,13 +956,17 @@ export const AdminPanel2 = () => {
               </form>
             </section>
 
-            <section className="rounded-lg bg-white p-6 shadow">
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <section className="rounded-lg bg-white p-4 shadow sm:p-6">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-800">Existing Promo Codes</h2>
                   <p className="mt-1 text-sm text-gray-500">These codes are saved in the promo_codes table and can be typed during checkout.</p>
                 </div>
-                <button onClick={loadPromoCodes} disabled={promoLoading} className="rounded-md bg-gray-100 px-4 py-2 text-sm text-gray-700 shadow hover:bg-gray-200 disabled:bg-gray-100">
+                <button
+                  onClick={loadPromoCodes}
+                  disabled={promoLoading}
+                  className="w-full rounded-md bg-gray-100 px-4 py-2 text-sm text-gray-700 shadow hover:bg-gray-200 disabled:bg-gray-100 sm:w-auto"
+                >
                   {promoLoading ? 'Refreshing...' : 'Refresh'}
                 </button>
               </div>
@@ -972,66 +976,131 @@ export const AdminPanel2 = () => {
                   {promoLoading ? 'Loading promo codes...' : 'No promo codes found yet.'}
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-gray-50 text-left">
-                        <th className="px-3 py-2">Code</th>
-                        <th className="px-3 py-2">Type</th>
-                        <th className="px-3 py-2 text-right">Value</th>
-                        <th className="px-3 py-2">Active</th>
-                        <th className="px-3 py-2">Starts</th>
-                        <th className="px-3 py-2">Ends</th>
-                        <th className="px-3 py-2 text-center">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {promoCodes.map((promo) => (
-                        <tr key={promo.id} className="border-b">
-                          <td className="px-3 py-2 font-semibold text-gray-900">{promo.code}</td>
-                          <td className="px-3 py-2 capitalize">{promo.discount_type}</td>
-                          <td className="px-3 py-2 text-right">
-                            {promo.discount_type === 'percent'
-                              ? `${Number(promo.discount_value || 0).toFixed(2)}%`
-                              : `₱${Number(promo.discount_value || 0).toFixed(2)}`}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span className={`rounded-full px-2 py-1 text-xs font-medium ${promo.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                              {promo.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2">{promo.starts_at ? new Date(promo.starts_at).toLocaleDateString() : '—'}</td>
-                          <td className="px-3 py-2">{promo.ends_at ? new Date(promo.ends_at).toLocaleDateString() : '—'}</td>
-                          <td className="px-3 py-2">
-                            <div className="flex flex-wrap items-center justify-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleEditPromo(promo)}
-                                className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-700"
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleTogglePromoActive(promo)}
-                                className="rounded-md bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-900"
-                              >
-                                {promo.is_active ? 'Disable' : 'Enable'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePromo(promo)}
-                                className="rounded-md bg-red-600 px-3 py-2 text-xs text-white hover:bg-red-700"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
+                <>
+                  <div className="space-y-3 md:hidden">
+                    {promoCodes.map((promo) => (
+                      <div key={promo.id} className="rounded-xl border border-gray-200 p-4 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="break-all text-lg font-semibold text-gray-900">{promo.code}</p>
+                            <p className="mt-1 text-sm text-gray-500 capitalize">{promo.discount_type} discount</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${promo.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                            {promo.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Value</p>
+                            <p className="mt-1 font-semibold text-gray-900">
+                              {promo.discount_type === 'percent'
+                                ? `${Number(promo.discount_value || 0).toFixed(2)}%`
+                                : `₱${Number(promo.discount_value || 0).toFixed(2)}`}
+                            </p>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Type</p>
+                            <p className="mt-1 font-semibold text-gray-900 capitalize">{promo.discount_type}</p>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Starts</p>
+                            <p className="mt-1 font-semibold text-gray-900">{promo.starts_at ? new Date(promo.starts_at).toLocaleDateString() : '—'}</p>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 px-3 py-2">
+                            <p className="text-xs uppercase tracking-wide text-gray-500">Ends</p>
+                            <p className="mt-1 font-semibold text-gray-900">{promo.ends_at ? new Date(promo.ends_at).toLocaleDateString() : '—'}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditPromo(promo)}
+                            className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-700"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePromoActive(promo)}
+                            className="rounded-md bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-900"
+                          >
+                            {promo.is_active ? 'Disable' : 'Enable'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePromo(promo)}
+                            className="rounded-md bg-red-600 px-3 py-2 text-xs text-white hover:bg-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b bg-gray-50 text-left">
+                          <th className="px-3 py-2">Code</th>
+                          <th className="px-3 py-2">Type</th>
+                          <th className="px-3 py-2 text-right">Value</th>
+                          <th className="px-3 py-2">Active</th>
+                          <th className="px-3 py-2">Starts</th>
+                          <th className="px-3 py-2">Ends</th>
+                          <th className="px-3 py-2 text-center">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {promoCodes.map((promo) => (
+                          <tr key={promo.id} className="border-b">
+                            <td className="px-3 py-2 font-semibold text-gray-900">{promo.code}</td>
+                            <td className="px-3 py-2 capitalize">{promo.discount_type}</td>
+                            <td className="px-3 py-2 text-right">
+                              {promo.discount_type === 'percent'
+                                ? `${Number(promo.discount_value || 0).toFixed(2)}%`
+                                : `₱${Number(promo.discount_value || 0).toFixed(2)}`}
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={`rounded-full px-2 py-1 text-xs font-medium ${promo.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {promo.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">{promo.starts_at ? new Date(promo.starts_at).toLocaleDateString() : '—'}</td>
+                            <td className="px-3 py-2">{promo.ends_at ? new Date(promo.ends_at).toLocaleDateString() : '—'}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex flex-wrap items-center justify-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditPromo(promo)}
+                                  className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-700"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePromoActive(promo)}
+                                  className="rounded-md bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-900"
+                                >
+                                  {promo.is_active ? 'Disable' : 'Enable'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeletePromo(promo)}
+                                  className="rounded-md bg-red-600 px-3 py-2 text-xs text-white hover:bg-red-700"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </section>
           </div>
