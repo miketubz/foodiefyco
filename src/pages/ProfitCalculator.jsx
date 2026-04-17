@@ -8,6 +8,12 @@ const formatCurrency = (value) =>
     maximumFractionDigits: 2,
   })}`;
 
+const formatNumber = (value) =>
+  Number(value || 0).toLocaleString('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
 const ProfitCalculator = () => {
   const navigate = useNavigate();
 
@@ -112,6 +118,7 @@ const ProfitCalculator = () => {
       orderCount: data.length,
       averageOrderValue: data.length ? totalSales / data.length : 0,
       dailyBreakdown,
+      rawOrders: data,
     });
 
     setLoading(false);
@@ -156,6 +163,211 @@ const ProfitCalculator = () => {
   }, [salesData, investmentNum]);
 
   const canShowResults = Boolean(salesData);
+
+  const exportRows = useMemo(() => {
+    if (!salesData) return [];
+
+    const summaryRows = [
+      ['Profit Calculator Report'],
+      ['Start Date', dateRange.start || ''],
+      ['End Date', dateRange.end || ''],
+      ['Total Sales', formatNumber(salesData.totalSales)],
+      ['Order Count', salesData.orderCount],
+      ['Average Order Value', formatNumber(salesData.averageOrderValue)],
+      ['Investment / Cost', formatNumber(investmentNum)],
+      ['Net Profit', formatNumber(computed.grossProfit)],
+      ['Margin %', computed.margin.toFixed(2)],
+      [],
+      ['Daily Breakdown'],
+      ['Date', 'Orders', 'Sales Total'],
+      ...salesData.dailyBreakdown.map((day) => [
+        day.date,
+        day.orders,
+        formatNumber(day.total),
+      ]),
+    ];
+
+    return summaryRows;
+  }, [salesData, dateRange.start, dateRange.end, investmentNum, computed.grossProfit, computed.margin]);
+
+  const downloadFile = (content, filename, type) => {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = () => {
+    if (!salesData) return;
+
+    const csv = exportRows
+      .map((row) =>
+        row
+          .map((cell) => {
+            const cellText = String(cell ?? '');
+            return `"${cellText.replace(/"/g, '""')}"`;
+          })
+          .join(',')
+      )
+      .join('\n');
+
+    downloadFile(csv, `profit-report-${dateRange.start || 'start'}-to-${dateRange.end || 'end'}.csv`, 'text/csv;charset=utf-8;');
+  };
+
+  const handleExportExcel = () => {
+    if (!salesData) return;
+    const tsv = exportRows
+      .map((row) => row.map((cell) => String(cell ?? '')).join('\t'))
+      .join('\n');
+
+    downloadFile(
+      tsv,
+      `profit-report-${dateRange.start || 'start'}-to-${dateRange.end || 'end'}.xls`,
+      'application/vnd.ms-excel;charset=utf-8;'
+    );
+  };
+
+  const handleExportPdf = () => {
+    if (!salesData) return;
+
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    if (!printWindow) return;
+
+    const dailyRows = salesData.dailyBreakdown
+      .map(
+        (day) => `
+          <tr>
+            <td>${day.date}</td>
+            <td>${day.orders}</td>
+            <td>₱${formatNumber(day.total)}</td>
+          </tr>
+        `
+      )
+      .join('');
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Profit Report</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              padding: 24px;
+              color: #0f172a;
+            }
+            h1, h2 {
+              margin: 0 0 12px 0;
+            }
+            .meta, .summary, .table-wrap {
+              margin-top: 20px;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 12px;
+              margin-top: 12px;
+            }
+            .card {
+              border: 1px solid #cbd5e1;
+              border-radius: 12px;
+              padding: 12px;
+            }
+            .label {
+              font-size: 12px;
+              color: #64748b;
+              margin-bottom: 6px;
+            }
+            .value {
+              font-size: 20px;
+              font-weight: 700;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 12px;
+            }
+            th, td {
+              border: 1px solid #cbd5e1;
+              text-align: left;
+              padding: 10px;
+              font-size: 14px;
+            }
+            th {
+              background: #f8fafc;
+            }
+            @media print {
+              body {
+                padding: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Profit Calculator Report</h1>
+          <div class="meta">
+            <p><strong>Date Range:</strong> ${dateRange.start || '-'} to ${dateRange.end || '-'}</p>
+          </div>
+
+          <div class="summary">
+            <h2>Summary</h2>
+            <div class="grid">
+              <div class="card">
+                <div class="label">Total Sales</div>
+                <div class="value">₱${formatNumber(salesData.totalSales)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Order Count</div>
+                <div class="value">${salesData.orderCount}</div>
+              </div>
+              <div class="card">
+                <div class="label">Average Order Value</div>
+                <div class="value">₱${formatNumber(salesData.averageOrderValue)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Investment / Cost</div>
+                <div class="value">₱${formatNumber(investmentNum)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Net Profit</div>
+                <div class="value">₱${formatNumber(computed.grossProfit)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Margin</div>
+                <div class="value">${computed.margin.toFixed(2)}%</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <h2>Daily Breakdown</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Orders</th>
+                  <th>Sales Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${dailyRows || '<tr><td colspan="3">No data available</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+    }, 300);
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-5 sm:px-6 lg:px-8">
@@ -257,6 +469,33 @@ const ProfitCalculator = () => {
                   Example: ingredients, labor, packaging, delivery, utilities.
                 </p>
               </div>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                disabled={!salesData || loading}
+                className="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                onClick={handleExportExcel}
+                disabled={!salesData || loading}
+                className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Export Excel
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                disabled={!salesData || loading}
+                className="inline-flex items-center justify-center rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Export PDF
+              </button>
             </div>
 
             {error && (
