@@ -40,9 +40,9 @@ function AdminExternalPage() {
   );
 
   const paymentQrMap = {
-    GCASH: '/pix/gcash-qr.jpg',
-    GOtyme: '/pix/gotyme-qr.jpg',
-    UnionBank: '/pix/unionbank-qr.jpg',
+    GCASH: '/pix/gcashqr.png',
+    GOtyme: '/pix/nicogotymeqr.jpg',
+    UnionBank: '/pix/unionbankqr.jpg',
   };
 
   const selectedPaymentQr =
