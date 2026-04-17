@@ -149,103 +149,88 @@ export default function MenuAdminPanel() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 px-3 py-4 sm:px-6 sm:py-6">
+    <div className="min-h-screen bg-slate-100 px-4 py-4 sm:px-6 sm:py-6">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-col gap-4 rounded-3xl bg-white p-4 shadow-sm sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mb-6 flex flex-col gap-4 rounded-3xl bg-white p-5 shadow-sm sm:p-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-orange-500">
               FoodiefyCo Admin
             </p>
-            <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">Menu Management</h1>
+            <h1 className="mt-2 text-3xl font-bold text-slate-900">Menu Management</h1>
             <p className="mt-1 text-sm text-slate-500">
               Add, update, and arrange items shown in your front store.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="flex flex-wrap gap-3">
             <Link
               to="/"
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               Front Store
             </Link>
             <Link
               to="/admin"
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               Orders
             </Link>
             <Link
               to="/admin/menu"
-              className="rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+              className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
             >
               Menu
             </Link>
           </div>
         </div>
 
-        <div className="mb-6 rounded-3xl bg-white p-4 shadow-sm sm:p-6">
+        <div className="mb-6 rounded-3xl bg-white p-5 shadow-sm sm:p-6">
           <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl font-semibold text-slate-900 sm:text-2xl">Add Menu Item</h2>
+            <h2 className="text-2xl font-semibold text-slate-900">Add Menu Item</h2>
             <p className="text-sm text-slate-500">Lower sort order shows first.</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Name</label>
-              <input
-                type="text"
-                placeholder="Name"
-                value={newItem.name}
-                onChange={(e) => handleNewItemChange('name', e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <input
+              type="text"
+              placeholder="Name"
+              value={newItem.name}
+              onChange={(e) => handleNewItemChange('name', e.target.value)}
+              className="rounded-xl border border-slate-300 px-4 py-3"
+            />
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Price</label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Price"
-                value={newItem.price}
-                onChange={(e) => handleNewItemChange('price', e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
-              />
-            </div>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Price"
+              value={newItem.price}
+              onChange={(e) => handleNewItemChange('price', e.target.value)}
+              className="rounded-xl border border-slate-300 px-4 py-3"
+            />
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Category</label>
-              <input
-                type="text"
-                placeholder="Category"
-                value={newItem.category}
-                onChange={(e) => handleNewItemChange('category', e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="Category"
+              value={newItem.category}
+              onChange={(e) => handleNewItemChange('category', e.target.value)}
+              className="rounded-xl border border-slate-300 px-4 py-3"
+            />
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Image URL</label>
-              <input
-                type="text"
-                placeholder="Image URL"
-                value={newItem.image_url}
-                onChange={(e) => handleNewItemChange('image_url', e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="Image URL"
+              value={newItem.image_url}
+              onChange={(e) => handleNewItemChange('image_url', e.target.value)}
+              className="rounded-xl border border-slate-300 px-4 py-3"
+            />
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Sort Order</label>
-              <input
-                type="number"
-                placeholder="Sort Order"
-                value={newItem.sort_order}
-                onChange={(e) => handleNewItemChange('sort_order', e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3"
-              />
-            </div>
+            <input
+              type="number"
+              placeholder="Sort Order"
+              value={newItem.sort_order}
+              onChange={(e) => handleNewItemChange('sort_order', e.target.value)}
+              className="rounded-xl border border-slate-300 px-4 py-3"
+            />
           </div>
 
           <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -296,15 +281,15 @@ export default function MenuAdminPanel() {
           <div className="rounded-3xl bg-white p-6 shadow-sm">Loading menu items...</div>
         ) : (
           <>
-            <div className="space-y-4 lg:hidden">
+            <div className="space-y-4 md:hidden">
               {items.map((item) => (
                 <div key={item.id} className="rounded-3xl bg-white p-4 shadow-sm">
                   <div className="mb-4 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
                         Item #{item.id}
                       </p>
-                      <h3 className="mt-1 truncate text-lg font-semibold text-slate-900">
+                      <h3 className="mt-1 text-lg font-semibold text-slate-900">
                         {item.name || 'Untitled item'}
                       </h3>
                     </div>
@@ -313,97 +298,66 @@ export default function MenuAdminPanel() {
                       <img
                         src={item.image_url}
                         alt={item.name}
-                        className="h-16 w-16 shrink-0 rounded-xl border border-slate-200 object-cover"
+                        className="h-16 w-16 rounded-xl border border-slate-200 object-cover"
                       />
                     ) : (
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-400">
+                      <div className="flex h-16 w-16 items-center justify-center rounded-xl border border-dashed border-slate-300 text-xs text-slate-400">
                         No image
                       </div>
                     )}
                   </div>
 
                   <div className="grid grid-cols-1 gap-3">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Name</label>
+                    <input
+                      type="text"
+                      value={item.name || ''}
+                      onChange={(e) => handleChange(item.id, 'name', e.target.value)}
+                      className="rounded-xl border border-slate-300 px-4 py-3"
+                      placeholder="Name"
+                    />
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={item.price ?? ''}
+                      onChange={(e) => handleChange(item.id, 'price', e.target.value)}
+                      className="rounded-xl border border-slate-300 px-4 py-3"
+                      placeholder="Price"
+                    />
+                    <input
+                      type="text"
+                      value={item.category || ''}
+                      onChange={(e) => handleChange(item.id, 'category', e.target.value)}
+                      className="rounded-xl border border-slate-300 px-4 py-3"
+                      placeholder="Category"
+                    />
+                    <input
+                      type="text"
+                      value={item.image_url || ''}
+                      onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
+                      className="rounded-xl border border-slate-300 px-4 py-3"
+                      placeholder="Image URL"
+                    />
+                    <div className="grid grid-cols-2 gap-3">
                       <input
-                        type="text"
-                        value={item.name || ''}
-                        onChange={(e) => handleChange(item.id, 'name', e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                        placeholder="Name"
+                        type="number"
+                        value={item.sort_order ?? 0}
+                        onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
+                        className="rounded-xl border border-slate-300 px-4 py-3"
+                        placeholder="Sort Order"
                       />
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Price</label>
+                      <label className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">
                         <input
-                          type="number"
-                          step="0.01"
-                          value={item.price ?? ''}
-                          onChange={(e) => handleChange(item.id, 'price', e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                          placeholder="Price"
+                          type="checkbox"
+                          checked={!!item.is_available}
+                          onChange={(e) => handleChange(item.id, 'is_available', e.target.checked)}
+                          className="h-4 w-4"
                         />
-                      </div>
-
-                      <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">Sort Order</label>
-                        <input
-                          type="number"
-                          value={item.sort_order ?? 0}
-                          onChange={(e) => handleChange(item.id, 'sort_order', e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                          placeholder="Sort Order"
-                        />
-                      </div>
+                        Available
+                      </label>
                     </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Category</label>
-                      <input
-                        type="text"
-                        value={item.category || ''}
-                        onChange={(e) => handleChange(item.id, 'category', e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                        placeholder="Category"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-slate-700">Image URL</label>
-                      <input
-                        type="text"
-                        value={item.image_url || ''}
-                        onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 px-4 py-3"
-                        placeholder="Image URL"
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={!!item.is_available}
-                        onChange={(e) => handleChange(item.id, 'is_available', e.target.checked)}
-                        className="h-4 w-4"
-                      />
-                      Available
-                    </label>
-
-                    {item.image_url ? (
-                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                        <p className="mb-2 text-sm text-slate-600">Preview</p>
-                        <img
-                          src={item.image_url}
-                          alt={item.name || 'Menu item preview'}
-                          className="h-20 w-20 rounded-xl border border-slate-200 object-cover"
-                        />
-                      </div>
-                    ) : null}
                   </div>
 
-                  <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <div className="mt-4 flex gap-3">
                     <button
                       onClick={() => handleSave(item)}
                       disabled={savingId === item.id}
@@ -423,7 +377,7 @@ export default function MenuAdminPanel() {
               ))}
             </div>
 
-            <div className="hidden overflow-x-auto rounded-3xl bg-white shadow-sm lg:block">
+            <div className="hidden overflow-x-auto rounded-3xl bg-white shadow-sm md:block">
               <table className="min-w-[1200px] w-full text-sm">
                 <thead className="bg-slate-100 text-slate-700">
                   <tr>
