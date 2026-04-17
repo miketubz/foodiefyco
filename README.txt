@@ -1,31 +1,25 @@
-This update adds:
-- visible Date Ordered column
-- visible Items and Item Count columns
-- success message when status changes
-- Clear Completed Orders button
+Orders archive update:
+- Admin Orders table now supports:
+  - per-row Archive button
+  - Archive Selected
+  - Archive Completed
+  - Archive Cancelled
+  - Archive by date range
+- Archived orders are excluded from the active Admin Orders list by default.
+- New Admin Archive page: /admin/archive
+  - filter by date and status
+  - unarchive single or selected
+  - export selected to PDF
+  - print support
+- Added admin shortcuts:
+  - Front Store
+  - Profit Calculator
+- Payment proof / QR rendering updated in admin tables.
 
-Files included:
-- src/components/AdminPanel.jsx
-- src/hooks/useOrdersExport.js
-
-If status update or clear completed orders fails, you likely need Supabase RLS policies for update/delete.
-Example SQL to allow the current browser-based admin setup:
-
-create policy "Allow anon update orders"
-on public.orders
-for update
-to anon
-using (true)
-with check (true);
-
-create policy "Allow anon delete orders"
-on public.orders
-for delete
-to anon
-using (true);
-
-create policy "Allow anon delete order_items"
-on public.order_items
-for delete
-to anon
-using (true);
+Supabase migration required:
+- Run: supabase/migrations/20260417_add_order_archive_columns.sql
+- Added columns are backward-compatible nullable/optional fields:
+  - is_archived boolean default false
+  - archived_at timestamptz null
+  - archived_by text null
+  - archive_reason text null

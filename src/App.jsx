@@ -1,16 +1,63 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import AdminPanel from './pages/AdminPanel';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import RequireAdmin from './components/RequireAdmin';
+import { AdminPanel2 } from './components/AdminPanel2';
+import AdminGalleryPage from './pages/AdminGalleryPage';
+import AdminLoginPage from './pages/AdminLoginPage';
+import ArchivePage from './pages/ArchivePage';
+import FrontendPage from './pages/FrontendPage';
+import GalleryPage from './pages/GalleryPage';
+import MenuAdminPanel from './pages/MenuAdminPanel';
+import ProfitCalculator from './pages/ProfitCalculator';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/admin" element={<AdminPanel />} />
-                <Route path="/" element={<Navigate to="/admin" replace />} />
-        <Route path="*" element={<Navigate to="/admin" replace />} />
-      </Routes>
-    </Router>
+    <Routes>
+      <Route path="/" element={<FrontendPage />} />
+      <Route path="/gallery" element={<GalleryPage />} />
+      <Route path="/admin/login" element={<AdminLoginPage />} />
+      <Route
+        path="/admin"
+        element={(
+          <RequireAdmin>
+            <AdminPanel2 />
+          </RequireAdmin>
+        )}
+      />
+      <Route
+        path="/admin/archive"
+        element={(
+          <RequireAdmin>
+            <ArchivePage />
+          </RequireAdmin>
+        )}
+      />
+      <Route
+        path="/admin/profit-calculator"
+        element={(
+          <RequireAdmin>
+            <ProfitCalculator />
+          </RequireAdmin>
+        )}
+      />
+      <Route
+        path="/admin/menu"
+        element={(
+          <RequireAdmin>
+            <MenuAdminPanel />
+          </RequireAdmin>
+        )}
+      />
+      <Route
+        path="/admin/gallery"
+        element={(
+          <RequireAdmin>
+            <AdminGalleryPage />
+          </RequireAdmin>
+        )}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

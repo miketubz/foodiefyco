@@ -29,7 +29,7 @@ export const exportSelectedArchiveToPDF = (orders) => {
   // Table data
   const tableColumn = ['ID', 'Customer', 'Total', 'Status', 'Payment', 'Ordered Date', 'Archived Date'];
   const tableRows = orders.map(order => [
-    order.id ? order.id.substring(0, 8) : 'N/A',
+    order.id ? String(order.id).slice(0, 8) : 'N/A',
     order.customer_name || 'N/A',
     `₱${parseFloat(order.total_amount || 0).toFixed(2)}`,
     order.status || 'N/A',
