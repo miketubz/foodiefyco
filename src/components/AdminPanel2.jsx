@@ -300,6 +300,8 @@ export const AdminPanel2 = () => {
     paidCount: 0,
     expectedCount: 0,
   });
+  const [salesRange, setSalesRange] = useState('today');
+  const [previousSales, setPreviousSales] = useState(0);
 
   useEffect(() => {
     const loadAdmin = async () => {
@@ -309,24 +311,6 @@ export const AdminPanel2 = () => {
 
     loadAdmin();
     loadPromoCodes();
-    loadTodaySalesSummary();
-  }, []);
-
-  useEffect(() => {
-    const channel = supabase
-      .channel('admin-orders-today-summary')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          loadTodaySalesSummary();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, []);
 
   const loadPromoCodes = async () => {
@@ -565,37 +549,6 @@ export const AdminPanel2 = () => {
     });
   };
 
-  const loadTodaySalesSummary = async () => {
-    try {
-      const today = formatDateInput(new Date());
-
-      const { data, error: summaryError } = await supabase
-        .from('orders')
-        .select('total_amount, payment_status, status, created_at')
-        .gte('created_at', toIsoStart(today))
-        .lt('created_at', toIsoNextDay(today));
-
-      if (summaryError) throw summaryError;
-
-      const rows = data || [];
-      const nonCancelled = rows.filter(
-        (order) => String(order.status || '').toLowerCase() !== 'cancelled'
-      );
-      const paidRows = nonCancelled.filter(
-        (order) => String(order.payment_status || '').toLowerCase() === 'paid'
-      );
-
-      setTodaySalesSummary({
-        paidSales: paidRows.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-        expectedSales: nonCancelled.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-        paidCount: paidRows.length,
-        expectedCount: nonCancelled.length,
-      });
-    } catch (err) {
-      console.error('Failed to load today sales summary:', err);
-    }
-  };
-
   const fetchOrders = async (activeFilters = filters) => {
     setLoading(true);
     setError('');
@@ -627,7 +580,6 @@ export const AdminPanel2 = () => {
       setError(err?.message || 'Failed to fetch orders');
     } finally {
       setLoading(false);
-      loadTodaySalesSummary();
     }
   };
 
@@ -895,29 +847,59 @@ export const AdminPanel2 = () => {
           </div>
         </div>
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
-              Today Paid Sales
-            </p>
-            <p className="mt-3 text-3xl font-bold text-slate-900">
-              {formatCurrency(todaySalesSummary.paidSales)}
-            </p>
-            <p className="mt-2 text-sm text-slate-500">
-              {todaySalesSummary.paidCount} paid order(s) today
-            </p>
+        <div className="mb-6 rounded-2xl bg-white p-4 shadow-sm sm:p-5">
+          <div className="mb-4 flex flex-wrap gap-2">
+            {[
+              { key: 'today', label: 'Today' },
+              { key: 'yesterday', label: 'Yesterday' },
+              { key: 'week', label: 'This Week' },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setSalesRange(option.key)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  salesRange === option.key
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
           </div>
 
-          <div className="rounded-2xl bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-500">
-              Today Expected Sales
-            </p>
-            <p className="mt-3 text-3xl font-bold text-slate-900">
-              {formatCurrency(todaySalesSummary.expectedSales)}
-            </p>
-            <p className="mt-2 text-sm text-slate-500">
-              {todaySalesSummary.expectedCount} non-cancelled order(s) today
-            </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
+                Paid Sales
+              </p>
+              <p className="mt-3 text-3xl font-bold text-slate-900">
+                {formatCurrency(todaySalesSummary.paidSales)}
+              </p>
+              <p className="mt-2 text-sm text-slate-600">
+                {todaySalesSummary.paidCount} paid order(s)
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-700">
+                Expected Sales
+              </p>
+              <p className="mt-3 text-3xl font-bold text-slate-900">
+                {formatCurrency(todaySalesSummary.expectedSales)}
+              </p>
+              <p className={`mt-2 text-sm font-medium ${
+                todaySalesSummary.expectedSales - previousSales >= 0
+                  ? 'text-emerald-700'
+                  : 'text-red-600'
+              }`}>
+                {todaySalesSummary.expectedSales - previousSales >= 0 ? '▲' : '▼'} {formatCurrency(Math.abs(todaySalesSummary.expectedSales - previousSales))} vs previous {salesRange === 'week' ? '7 days' : 'period'}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                {todaySalesSummary.expectedCount} non-cancelled order(s)
+              </p>
+            </div>
           </div>
         </div>
 
