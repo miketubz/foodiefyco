@@ -829,7 +829,7 @@ export const AdminPanel2 = () => {
             <Link to="/admin/external" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">External Orders</Link>
             <Link to="/admin/profit-calculator" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Profit Calculator</Link>
             <Link to="/admin/archive" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Archive</Link>
-            <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Menu</Link>
+            <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Manage Menu</Link>
             <Link to="/admin/gallery" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Gallery</Link>
             <button onClick={() => setShowPromoManager((prev) => !prev)} className="rounded-md bg-amber-500 px-4 py-2 text-white shadow hover:bg-amber-600">
               {showPromoManager ? 'Hide Promo Codes' : 'Promo Codes'}
