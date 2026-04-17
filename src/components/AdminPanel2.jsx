@@ -821,7 +821,7 @@ export const AdminPanel2 = () => {
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Orders</h1>
+            <h1 className="text-3xl font-bold text-gray-900">ADMIN DASHBOARD</h1>
             <p className="mt-1 text-sm text-gray-600">Archived orders are hidden from this active list by default.</p>
           </div>
           <div className="flex flex-wrap gap-3">
