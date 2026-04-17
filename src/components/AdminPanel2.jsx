@@ -2,13 +2,16 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { generateOrdersCSV, downloadCSV } from '../utils/csvExport';
+import gcashQr from '../../pix/gcashqr.png';
+import gotymeQr from '../../pix/nicogotyme.jpg';
+import unionbankQr from '../../pix/unionbankqr.jpg';
 
 const ARCHIVEABLE_STATUSES = new Set(['completed', 'cancelled']);
 
 const PAYMENT_QR_MAP = {
-  gcash: '/pix/gcash-qr.jpg',
-  gotyme: '/pix/gotyme-qr.jpg',
-  unionbank: '/pix/unionbank-qr.jpg',
+  gcash: gcashQr,
+  gotyme: gotymeQr,
+  unionbank: unionbankQr,
 };
 
 const formatDateInput = (date) => {
@@ -24,6 +27,16 @@ const toIsoNextDay = (date) => {
   d.setDate(d.getDate() + 1);
   return d.toISOString();
 };
+
+const formatCurrency = (value) => `₱${Number(value || 0).toFixed(2)}`;
+
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 
 const normalizeSource = (value) => {
   const source = String(value || '').trim().toLowerCase();
@@ -79,6 +92,174 @@ const buildOrdersQuery = (activeFilters, withArchiveFields) => {
   }
 
   return query;
+};
+
+const buildReceiptHtml = (order) => {
+  const itemRows = (order.orderItems || [])
+    .map(
+      (item) => `
+        <tr>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.name || 'Item')}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:center;">${Number(item.quantity || 0)}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatCurrency(item.price)}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatCurrency(item.subtotal)}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  const itemTotal = (order.orderItems || []).reduce(
+    (sum, item) => sum + Number(item.subtotal || Number(item.quantity || 0) * Number(item.price || 0)),
+    0
+  );
+
+  const subtotal = itemTotal || Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Receipt ${escapeHtml(order.orderId)}</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            font-family: Arial, sans-serif;
+            color: #111827;
+            margin: 0;
+            padding: 24px;
+            background: #ffffff;
+          }
+          .receipt {
+            max-width: 760px;
+            margin: 0 auto;
+          }
+          .muted {
+            color: #6b7280;
+          }
+          .header {
+            border-bottom: 2px solid #111827;
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+          }
+          .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px 20px;
+            margin-bottom: 20px;
+          }
+          .section {
+            margin-bottom: 20px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th {
+            text-align: left;
+            background: #f3f4f6;
+            padding: 10px 8px;
+            border-bottom: 1px solid #d1d5db;
+          }
+          .totals {
+            margin-left: auto;
+            max-width: 320px;
+          }
+          .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+          }
+          .totals-row.total {
+            border-top: 2px solid #111827;
+            margin-top: 8px;
+            padding-top: 10px;
+            font-weight: 700;
+            font-size: 18px;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+          }
+          @media (max-width: 640px) {
+            body {
+              padding: 16px;
+            }
+            .meta-grid {
+              grid-template-columns: 1fr;
+            }
+            th, td {
+              font-size: 12px;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header">
+            <h1 style="margin:0 0 8px;">FoodiefyCo Receipt</h1>
+            <p class="muted" style="margin:0;">Customer order summary</p>
+          </div>
+
+          <div class="meta-grid">
+            <div><strong>Order ID:</strong> ${escapeHtml(order.orderId)}</div>
+            <div><strong>Date Ordered:</strong> ${escapeHtml(order.orderDate)}</div>
+            <div><strong>Customer Name:</strong> ${escapeHtml(order.customerName)}</div>
+            <div><strong>Contact Number:</strong> ${escapeHtml(order.phoneNumber)}</div>
+            <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod)}</div>
+            <div><strong>Payment Status:</strong> ${escapeHtml(order.paymentStatus)}</div>
+            <div><strong>Source:</strong> ${escapeHtml(order.orderSource)}</div>
+            <div><strong>Promo Code:</strong> ${escapeHtml(order.promoCode || 'None')}</div>
+          </div>
+
+          <div class="section">
+            <h2 style="margin:0 0 10px;font-size:18px;">Delivery Details</h2>
+            <p style="margin:0 0 8px;"><strong>Address:</strong> ${escapeHtml(order.deliveryAddress)}</p>
+            <p style="margin:0;"><strong>Special Instructions:</strong> ${escapeHtml(order.specialInstructions)}</p>
+          </div>
+
+          <div class="section">
+            <h2 style="margin:0 0 10px;font-size:18px;">Items Ordered</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th style="text-align:right;">Unit Price</th>
+                  <th style="text-align:right;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemRows || `<tr><td colspan="4" style="padding:10px 8px;color:#6b7280;">No items found.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="totals">
+            <div class="totals-row">
+              <span>Subtotal</span>
+              <span>${formatCurrency(subtotal)}</span>
+            </div>
+            <div class="totals-row">
+              <span>Discount</span>
+              <span>-${formatCurrency(order.discountAmount)}</span>
+            </div>
+            <div class="totals-row total">
+              <span>Total</span>
+              <span>${formatCurrency(order.totalAmount)}</span>
+            </div>
+          </div>
+        </div>
+        <script>
+          window.onload = function () {
+            window.print();
+          };
+        </script>
+      </body>
+    </html>
+  `;
 };
 
 export const AdminPanel2 = () => {
@@ -283,6 +464,22 @@ export const AdminPanel2 = () => {
     await fetchOrders(filters);
   };
 
+  const handlePrintReceipt = (order) => {
+    const receiptWindow = window.open('', '_blank', 'width=900,height=900');
+
+    if (!receiptWindow) {
+      window.alert('Please allow popups so the receipt can open.');
+      return;
+    }
+
+    receiptWindow.document.write(buildReceiptHtml(order));
+    receiptWindow.document.close();
+  };
+
+  const handlePdfReceipt = (order) => {
+    handlePrintReceipt(order);
+  };
+
   const archiveOrdersByIds = async (orderIds, archiveReason) => {
     if (!archiveSchemaReady) {
       setActionError('Archive columns are not available yet. Run the SQL migration in supabase/migrations.');
@@ -443,15 +640,16 @@ export const AdminPanel2 = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gray-50 p-3 sm:p-4 md:p-8">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mb-6 flex flex-col gap-4 md:mb-8 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Admin Orders</h1>
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl">Admin Orders</h1>
             <p className="mt-1 text-sm text-gray-600">Archived orders are hidden from this active list by default.</p>
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <Link to="/" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Front Store</Link>
+            <Link to="/admin/external" className="rounded-md bg-indigo-600 px-4 py-2 text-white shadow hover:bg-indigo-700">External Orders</Link>
             <Link to="/admin/profit-calculator" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Profit Calculator</Link>
             <Link to="/admin/archive" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Archive</Link>
             <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Menu</Link>
@@ -460,17 +658,20 @@ export const AdminPanel2 = () => {
           </div>
         </div>
 
-        <div className="mb-6 rounded-lg bg-white p-6 shadow">
+        <div className="mb-6 rounded-lg bg-white p-4 shadow sm:p-6">
           <h2 className="mb-4 text-xl font-semibold text-gray-800">Fetch Orders</h2>
-          <div className="mb-4 flex flex-wrap gap-2">
-            <button onClick={() => handleQuickRange('today')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Today</button>
-            <button onClick={() => handleQuickRange('yesterday')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Yesterday</button>
-            <button onClick={() => handleQuickRange('last7')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Last 7 Days</button>
-            <button onClick={() => handleQuickRange('thisMonth')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">This Month</button>
-            <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">All Dates</button>
+
+          <div className="-mx-1 mb-4 overflow-x-auto px-1">
+            <div className="flex min-w-max gap-2">
+              <button onClick={() => handleQuickRange('today')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Today</button>
+              <button onClick={() => handleQuickRange('yesterday')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Yesterday</button>
+              <button onClick={() => handleQuickRange('last7')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">Last 7 Days</button>
+              <button onClick={() => handleQuickRange('thisMonth')} className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">This Month</button>
+              <button onClick={() => handleQuickRange('all')} className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700">All Dates</button>
+            </div>
           </div>
 
-          <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-6">
+          <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
             <input type="date" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2" />
             <input type="date" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2" />
             <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2">
@@ -497,8 +698,8 @@ export const AdminPanel2 = () => {
           {successMessage && <div className="mt-3 rounded border border-green-400 bg-green-100 p-3 text-green-700">{successMessage}</div>}
         </div>
 
-        <div className="rounded-lg bg-white p-4 md:p-6 shadow">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="rounded-lg bg-white p-4 shadow md:p-6">
+          <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
             <h2 className="text-xl font-semibold text-gray-800">Orders ({filteredOrders.length})</h2>
             <div className="flex flex-wrap gap-2">
               <button onClick={handleArchiveSelected} disabled={bulkArchiving || !selectedOrderIds.length || !archiveSchemaReady} className="rounded-md bg-purple-600 px-4 py-2 text-white disabled:bg-gray-300">Archive Selected ({selectedOrderIds.length})</button>
@@ -513,6 +714,7 @@ export const AdminPanel2 = () => {
             {filteredOrders.map((order) => {
               const canArchive = ARCHIVEABLE_STATUSES.has(order.status) && !order.isArchived;
               const isSelected = selectedOrderIds.includes(order.orderId);
+              const isExpanded = expandedOrderId === order.orderId;
               return (
                 <div key={order.orderId} className="rounded-xl border border-gray-200 p-4">
                   <div className="mb-2 flex items-start justify-between gap-3">
@@ -526,19 +728,47 @@ export const AdminPanel2 = () => {
                       Select
                     </label>
                   </div>
-                  <p className="text-sm text-gray-700">{order.itemsSummary}</p>
-                  <div className="mt-2 text-sm text-gray-600">Payment: {order.paymentMethod} • {order.paymentStatus}</div>
-                  <div className="mt-2 text-sm text-gray-600">Total: ₱{Number(order.totalAmount || 0).toFixed(2)}</div>
-                  <div className="mt-2 text-sm text-gray-600">Status: {order.status}</div>
-                  <div className="mt-2">{renderProofContent(order)}</div>
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={() => handleArchiveSingle(order)} disabled={!canArchive || !archiveSchemaReady || bulkArchiving} className="rounded-md bg-purple-600 px-3 py-2 text-xs text-white disabled:bg-gray-300">Archive</button>
-                    <button onClick={() => setExpandedOrderId(expandedOrderId === order.orderId ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-xs text-white">{expandedOrderId === order.orderId ? 'Hide' : 'View'}</button>
+
+                  <div className="space-y-1 text-sm text-gray-700">
+                    <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
+                    <p><span className="font-semibold">Source:</span> {order.orderSource}</p>
+                    <p><span className="font-semibold">Payment:</span> {order.paymentMethod} • {order.paymentStatus}</p>
+                    <p><span className="font-semibold">Status:</span> {order.status}</p>
+                    <p><span className="font-semibold">Total:</span> {formatCurrency(order.totalAmount)}</p>
+                    <p><span className="font-semibold">Items:</span> {order.itemsSummary}</p>
                   </div>
-                  {expandedOrderId === order.orderId && (
+
+                  <div className="mt-3">{renderProofContent(order)}</div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-xs text-white">
+                      {isExpanded ? 'Hide' : 'View'}
+                    </button>
+                    <button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white">
+                      Print
+                    </button>
+                    <button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-violet-600 px-3 py-2 text-xs text-white">
+                      PDF
+                    </button>
+                    <button onClick={() => handleArchiveSingle(order)} disabled={!canArchive || !archiveSchemaReady || bulkArchiving} className="rounded-md bg-purple-600 px-3 py-2 text-xs text-white disabled:bg-gray-300">
+                      Archive
+                    </button>
+                  </div>
+
+                  {isExpanded && (
                     <div className="mt-3 rounded-md bg-gray-50 p-3 text-sm">
-                      <p><span className="font-semibold">Address:</span> {order.deliveryAddress}</p>
+                      <p><span className="font-semibold">Promo Code:</span> {order.promoCode || 'None'}</p>
+                      <p className="mt-1"><span className="font-semibold">Discount:</span> {formatCurrency(order.discountAmount)}</p>
                       <p className="mt-1"><span className="font-semibold">Instructions:</span> {order.specialInstructions}</p>
+                      <div className="mt-3 space-y-2">
+                        {order.orderItems.length > 0 ? order.orderItems.map((item, index) => (
+                          <div key={`${order.orderId}-${index}`} className="rounded border border-gray-200 bg-white p-2">
+                            <p className="font-medium text-gray-800">{item.name}</p>
+                            <p className="text-xs text-gray-500">Qty {item.quantity} • {formatCurrency(item.price)} each</p>
+                            <p className="text-sm font-semibold text-gray-800">{formatCurrency(item.subtotal)}</p>
+                          </div>
+                        )) : <p className="text-sm text-gray-500">No items found.</p>}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -592,12 +822,12 @@ export const AdminPanel2 = () => {
                           </select>
                         </td>
                         <td className="px-4 py-3">{renderProofContent(order)}</td>
-                        <td className="px-4 py-3 max-w-[220px] whitespace-pre-wrap break-words">{order.specialInstructions}</td>
+                        <td className="max-w-[220px] whitespace-pre-wrap break-words px-4 py-3">{order.specialInstructions}</td>
                         <td className="px-4 py-3">{order.promoCode || 'None'}</td>
-                        <td className="px-4 py-3 text-right">-₱{Number(order.discountAmount || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">-{formatCurrency(order.discountAmount)}</td>
                         <td className="px-4 py-3">{order.itemsSummary}</td>
                         <td className="px-4 py-3 text-center">{order.itemCount}</td>
-                        <td className="px-4 py-3 text-right">₱{Number(order.totalAmount || 0).toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">{formatCurrency(order.totalAmount)}</td>
                         <td className="px-4 py-3">
                           <select value={order.status} onChange={(e) => handleStatusChange(order.orderId, e.target.value)} disabled={savingOrderId === order.orderId} className="rounded-md border border-gray-300 px-3 py-2">
                             <option value="pending">Pending</option>
@@ -606,9 +836,15 @@ export const AdminPanel2 = () => {
                           </select>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <div className="flex justify-center gap-2">
+                          <div className="flex flex-wrap justify-center gap-2">
                             <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800">
                               {isExpanded ? 'Hide' : 'View'}
+                            </button>
+                            <button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-blue-600 px-3 py-2 text-white hover:bg-blue-700">
+                              Print
+                            </button>
+                            <button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-violet-600 px-3 py-2 text-white hover:bg-violet-700">
+                              PDF
                             </button>
                             <button onClick={() => handleArchiveSingle(order)} disabled={!canArchive || !archiveSchemaReady || bulkArchiving} className="rounded-md bg-purple-600 px-3 py-2 text-white disabled:bg-gray-300">
                               Archive
@@ -620,14 +856,34 @@ export const AdminPanel2 = () => {
                         <tr className="border-b bg-gray-50">
                           <td colSpan="17" className="px-6 py-4">
                             <div className="rounded-lg border border-gray-200 bg-white p-4">
+                              <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                                <div>
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Customer</p>
+                                  <p className="mt-1 text-sm text-gray-800">{order.customerName}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Contact</p>
+                                  <p className="mt-1 text-sm text-gray-800">{order.phoneNumber}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Address</p>
+                                  <p className="mt-1 text-sm text-gray-800">{order.deliveryAddress}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Totals</p>
+                                  <p className="mt-1 text-sm text-gray-800">Discount: {formatCurrency(order.discountAmount)}</p>
+                                  <p className="text-sm font-semibold text-gray-900">Total: {formatCurrency(order.totalAmount)}</p>
+                                </div>
+                              </div>
+
                               <h3 className="mb-3 font-semibold text-gray-800">Ordered Items</h3>
                               {order.orderItems.length > 0 ? order.orderItems.map((item, index) => (
-                                <div key={`${order.orderId}-${index}`} className="flex items-start justify-between border-b border-gray-100 pb-2">
+                                <div key={`${order.orderId}-${index}`} className="flex items-start justify-between border-b border-gray-100 py-2">
                                   <div>
                                     <p className="font-medium text-gray-800">{item.name}</p>
-                                    <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
+                                    <p className="text-sm text-gray-500">Quantity: {item.quantity} • Unit Price: {formatCurrency(item.price)}</p>
                                   </div>
-                                  <p className="font-semibold text-gray-800">₱{Number(item.subtotal).toFixed(2)}</p>
+                                  <p className="font-semibold text-gray-800">{formatCurrency(item.subtotal)}</p>
                                 </div>
                               )) : <p className="text-sm text-gray-500">No items found.</p>}
                             </div>
