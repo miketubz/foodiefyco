@@ -35,6 +35,180 @@ const toIsoNextDay = (date) => {
   return d.toISOString();
 };
 
+
+const formatCurrency = (value) => `₱${Number(value || 0).toFixed(2)}`;
+
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+
+const buildReceiptHtml = (order) => {
+  const itemRows = (order.orderItems || [])
+    .map(
+      (item) => `
+        <tr>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.name || 'Item')}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:center;">${Number(item.quantity || 0)}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatCurrency(item.price)}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatCurrency(item.subtotal)}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  const itemTotal = (order.orderItems || []).reduce(
+    (sum, item) => sum + Number(item.subtotal || Number(item.quantity || 0) * Number(item.price || 0)),
+    0
+  );
+
+  const subtotal = itemTotal || Number(order.totalAmount || 0) + Number(order.discountAmount || 0);
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Receipt ${escapeHtml(order.orderId)}</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style>
+          * { box-sizing: border-box; }
+          body {
+            font-family: Arial, sans-serif;
+            color: #111827;
+            margin: 0;
+            padding: 24px;
+            background: #ffffff;
+          }
+          .receipt {
+            max-width: 760px;
+            margin: 0 auto;
+          }
+          .muted {
+            color: #6b7280;
+          }
+          .header {
+            border-bottom: 2px solid #111827;
+            padding-bottom: 16px;
+            margin-bottom: 20px;
+          }
+          .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px 20px;
+            margin-bottom: 20px;
+          }
+          .section {
+            margin-bottom: 20px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th {
+            text-align: left;
+            background: #f3f4f6;
+            padding: 10px 8px;
+            border-bottom: 1px solid #d1d5db;
+          }
+          .totals {
+            margin-left: auto;
+            max-width: 320px;
+          }
+          .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+          }
+          .totals-row.total {
+            border-top: 2px solid #111827;
+            margin-top: 8px;
+            padding-top: 10px;
+            font-weight: 700;
+            font-size: 18px;
+          }
+          @media print {
+            body {
+              padding: 0;
+            }
+          }
+          @media (max-width: 640px) {
+            body {
+              padding: 16px;
+            }
+            .meta-grid {
+              grid-template-columns: 1fr;
+            }
+            th, td {
+              font-size: 12px;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="receipt">
+          <div class="header">
+            <h1 style="margin:0 0 8px;">FoodiefyCo Receipt</h1>
+            <p class="muted" style="margin:0;">Customer order summary</p>
+          </div>
+
+          <div class="meta-grid">
+            <div><strong>Order ID:</strong> ${escapeHtml(order.orderId)}</div>
+            <div><strong>Date Ordered:</strong> ${escapeHtml(order.orderDate)}</div>
+            <div><strong>Customer Name:</strong> ${escapeHtml(order.customerName)}</div>
+            <div><strong>Contact Number:</strong> ${escapeHtml(order.phoneNumber)}</div>
+            <div><strong>Payment Method:</strong> ${escapeHtml(order.paymentMethod)}</div>
+            <div><strong>Payment Status:</strong> ${escapeHtml(order.paymentStatus)}</div>
+            <div><strong>Source:</strong> ${escapeHtml(order.orderSource)}</div>
+            <div><strong>Status:</strong> ${escapeHtml(order.status)}</div>
+            <div><strong>Delivery Address:</strong> ${escapeHtml(order.deliveryAddress)}</div>
+            <div><strong>Promo Code:</strong> ${escapeHtml(order.promoCode || 'None')}</div>
+          </div>
+
+          <div class="section">
+            <h2 style="margin:0 0 10px;">Items Ordered</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th style="text-align:center;">Qty</th>
+                  <th style="text-align:right;">Unit Price</th>
+                  <th style="text-align:right;">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemRows || '<tr><td colspan="4" style="padding:12px 8px;color:#6b7280;">No items found.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="section totals">
+            <div class="totals-row"><span>Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
+            <div class="totals-row"><span>Discount</span><span>-${formatCurrency(order.discountAmount)}</span></div>
+            <div class="totals-row total"><span>Total</span><span>${formatCurrency(order.totalAmount)}</span></div>
+          </div>
+
+          <div class="section">
+            <h2 style="margin:0 0 8px;">Special Instructions</h2>
+            <p style="margin:0;line-height:1.6;">${escapeHtml(order.specialInstructions || 'None')}</p>
+          </div>
+
+          <script>
+            window.onload = function () {
+              setTimeout(function () {
+                window.focus();
+              }, 150);
+            };
+          </script>
+        </div>
+      </body>
+    </html>
+  `;
+};
+
 const normalizeSource = (value) => {
   const source = String(value || '').trim().toLowerCase();
   if (!source || source === 'website' || source === 'internal') return 'internal';
@@ -119,6 +293,7 @@ export const AdminPanel2 = () => {
   const [promoError, setPromoError] = useState('');
   const [promoSuccess, setPromoSuccess] = useState('');
   const [promoForm, setPromoForm] = useState(DEFAULT_PROMO_FORM);
+  const [editingPromoId, setEditingPromoId] = useState(null);
 
   useEffect(() => {
     const loadAdmin = async () => {
@@ -155,6 +330,7 @@ export const AdminPanel2 = () => {
 
   const resetPromoForm = () => {
     setPromoForm(DEFAULT_PROMO_FORM);
+    setEditingPromoId(null);
   };
 
   const handleCreatePromoCode = async (e) => {
@@ -197,21 +373,84 @@ export const AdminPanel2 = () => {
         ends_at: promoForm.endsAt ? new Date(`${promoForm.endsAt}T23:59:59`).toISOString() : null,
       };
 
-      const { error: insertError } = await supabase.from('promo_codes').insert([payload]);
+      let dbError = null;
 
-      if (insertError) throw insertError;
+      if (editingPromoId) {
+        const { error: updateError } = await supabase
+          .from('promo_codes')
+          .update(payload)
+          .eq('id', editingPromoId);
+        dbError = updateError;
+      } else {
+        const { error: insertError } = await supabase
+          .from('promo_codes')
+          .insert([payload]);
+        dbError = insertError;
+      }
 
-      setPromoSuccess(`Promo code ${normalizedCode} created successfully.`);
+      if (dbError) throw dbError;
+
+      setPromoSuccess(
+        editingPromoId
+          ? `Promo code ${normalizedCode} updated successfully.`
+          : `Promo code ${normalizedCode} created successfully.`
+      );
       resetPromoForm();
       await loadPromoCodes();
     } catch (err) {
-      setPromoError(err?.message || 'Failed to create promo code.');
+      setPromoError(err?.message || `Failed to ${editingPromoId ? 'update' : 'create'} promo code.`);
+    } finally {
+      setPromoSaving(false);
+    }
+  };
+
+  const handleEditPromoCode = (promo) => {
+    setPromoError('');
+    setPromoSuccess('');
+    setEditingPromoId(promo.id);
+    setPromoForm({
+      code: promo.code || '',
+      discountType: promo.discount_type || 'fixed',
+      discountValue: String(promo.discount_value ?? ''),
+      isActive: Boolean(promo.is_active),
+      startsAt: promo.starts_at ? String(promo.starts_at).slice(0, 10) : '',
+      endsAt: promo.ends_at ? String(promo.ends_at).slice(0, 10) : '',
+    });
+    setShowPromoManager(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDeletePromoCode = async (promo) => {
+    const confirmed = window.confirm(`Delete promo code ${promo.code}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    setPromoSaving(true);
+    setPromoError('');
+    setPromoSuccess('');
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('promo_codes')
+        .delete()
+        .eq('id', promo.id);
+
+      if (deleteError) throw deleteError;
+
+      if (editingPromoId === promo.id) {
+        resetPromoForm();
+      }
+
+      setPromoSuccess(`Promo code ${promo.code} deleted successfully.`);
+      await loadPromoCodes();
+    } catch (err) {
+      setPromoError(err?.message || 'Failed to delete promo code.');
     } finally {
       setPromoSaving(false);
     }
   };
 
   const handleTogglePromoActive = async (promo) => {
+
     setPromoError('');
     setPromoSuccess('');
 
@@ -489,6 +728,23 @@ export const AdminPanel2 = () => {
     downloadCSV(csvContent, `orders_${timestamp}.csv`);
   };
 
+
+  const handlePrintReceipt = (order) => {
+    const receiptWindow = window.open('', '_blank', 'width=900,height=900');
+
+    if (!receiptWindow) {
+      window.alert('Please allow popups so the receipt can open.');
+      return;
+    }
+
+    receiptWindow.document.write(buildReceiptHtml(order));
+    receiptWindow.document.close();
+  };
+
+  const handlePdfReceipt = (order) => {
+    handlePrintReceipt(order);
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate('/admin/login', { replace: true });
@@ -586,9 +842,9 @@ export const AdminPanel2 = () => {
           <div className="mb-6 grid gap-6 xl:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
             <section className="rounded-lg bg-white p-6 shadow">
               <div className="mb-4">
-                <h2 className="text-xl font-semibold text-gray-800">Promo Code Generator</h2>
+                <h2 className="text-xl font-semibold text-gray-800">{editingPromoId ? 'Edit Promo Code' : 'Promo Code Generator'}</h2>
                 <p className="mt-1 text-sm text-gray-500">
-                  Create a promo code manually, choose fixed or percent discount, then save it to Supabase.
+                  {editingPromoId ? 'Modify the selected promo code, then save your changes.' : 'Create a promo code manually, choose fixed or percent discount, then save it to Supabase.'}
                 </p>
               </div>
 
@@ -686,7 +942,7 @@ export const AdminPanel2 = () => {
                     disabled={promoSaving}
                     className="rounded-md bg-amber-500 px-4 py-2 text-white shadow hover:bg-amber-600 disabled:bg-gray-300"
                   >
-                    {promoSaving ? 'Saving...' : 'Save Promo Code'}
+                    {promoSaving ? (editingPromoId ? 'Updating...' : 'Saving...') : (editingPromoId ? 'Update Promo Code' : 'Save Promo Code')}
                   </button>
                   <button
                     type="button"
@@ -726,7 +982,7 @@ export const AdminPanel2 = () => {
                         <th className="px-3 py-2">Active</th>
                         <th className="px-3 py-2">Starts</th>
                         <th className="px-3 py-2">Ends</th>
-                        <th className="px-3 py-2 text-center">Action</th>
+                        <th className="px-3 py-2 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -910,9 +1166,15 @@ export const AdminPanel2 = () => {
                           </select>
                         </td>
                         <td className="px-4 py-3 text-center">
-                          <div className="flex justify-center gap-2">
+                          <div className="flex flex-wrap justify-center gap-2">
                             <button onClick={() => setExpandedOrderId(isExpanded ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-white hover:bg-gray-800">
                               {isExpanded ? 'Hide' : 'View'}
+                            </button>
+                            <button onClick={() => handlePrintReceipt(order)} className="rounded-md bg-sky-600 px-3 py-2 text-white hover:bg-sky-700">
+                              Print
+                            </button>
+                            <button onClick={() => handlePdfReceipt(order)} className="rounded-md bg-emerald-600 px-3 py-2 text-white hover:bg-emerald-700">
+                              PDF
                             </button>
                             <button onClick={() => handleArchiveSingle(order)} disabled={!canArchive || !archiveSchemaReady || bulkArchiving} className="rounded-md bg-purple-600 px-3 py-2 text-white disabled:bg-gray-300">
                               Archive
