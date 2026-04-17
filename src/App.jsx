@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import RequireAdmin from './components/RequireAdmin';
 import { AdminPanel2 } from './components/AdminPanel2';
+import AdminExternalPage from './pages/AdminExternalPage';
 import AdminGalleryPage from './pages/AdminGalleryPage';
 import AdminHelpPage from './pages/AdminHelpPage';
 import AdminLoginPage from './pages/AdminLoginPage';
@@ -22,6 +23,14 @@ function App() {
         element={(
           <RequireAdmin>
             <AdminPanel2 />
+          </RequireAdmin>
+        )}
+      />
+      <Route
+        path="/admin/external"
+        element={(
+          <RequireAdmin>
+            <AdminExternalPage />
           </RequireAdmin>
         )}
       />
