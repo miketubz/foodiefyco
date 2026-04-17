@@ -29,7 +29,7 @@ const ArchivePage = () => {
   const [error, setError] = useState('');
   const [schemaError, setSchemaError] = useState('');
   const [selectedOrders, setSelectedOrders] = useState([]);
-  const [filters, setFilters] = useState({ start: '', end: '', status: 'all' });
+  const [filters, setFilters] = useState({ start: '', end: '', status: 'all', dateField: 'archived_at' });
   const [successMessage, setSuccessMessage] = useState('');
 
   const fetchArchivedOrders = async () => {
@@ -69,8 +69,10 @@ const ArchivePage = () => {
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       if (filters.status !== 'all' && order.status !== filters.status) return false;
-      if (filters.start && new Date(order.created_at) < new Date(`${filters.start}T00:00:00`)) return false;
-      if (filters.end && new Date(order.created_at) > new Date(`${filters.end}T23:59:59`)) return false;
+      const dateSource = filters.dateField === 'created_at' ? order.created_at : order.archived_at;
+      if (!dateSource) return false;
+      if (filters.start && new Date(dateSource) < new Date(`${filters.start}T00:00:00`)) return false;
+      if (filters.end && new Date(dateSource) > new Date(`${filters.end}T23:59:59`)) return false;
       return true;
     });
   }, [orders, filters]);
@@ -137,7 +139,7 @@ const ArchivePage = () => {
           </div>
         </div>
 
-        <div className="mb-4 grid grid-cols-1 gap-3 rounded-lg bg-white p-4 shadow md:grid-cols-5">
+        <div className="mb-4 grid grid-cols-1 gap-3 rounded-lg bg-white p-4 shadow md:grid-cols-6">
           <div>
             <label className="mb-1 block text-sm text-gray-600">Start Date</label>
             <input type="date" value={filters.start} onChange={(e) => setFilters((prev) => ({ ...prev, start: e.target.value }))} className="w-full rounded border px-2 py-2" />
@@ -152,6 +154,13 @@ const ArchivePage = () => {
               <option value="all">All</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm text-gray-600">Date Type</label>
+            <select value={filters.dateField} onChange={(e) => setFilters((prev) => ({ ...prev, dateField: e.target.value }))} className="w-full rounded border px-2 py-2">
+              <option value="archived_at">Archived Date</option>
+              <option value="created_at">Order Date</option>
             </select>
           </div>
           <button onClick={() => unarchiveByIds(selectedOrders)} className="rounded bg-emerald-600 px-3 py-2 text-white">Unarchive Selected ({selectedOrders.length})</button>
