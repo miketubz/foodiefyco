@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMenuItems } from '../hooks/useMenuItems';
 import { supabase } from '../lib/supabaseClient.js';
+import gcashQr from '../../pix/gcashqr.png';
+import gotymeQr from '../../pix/nicogotyme.jpg';
+import unionbankQr from '../../pix/unionbankqr.jpg';
 
 function AdminExternalPage() {
   const { menuItems, loading, error } = useMenuItems();
@@ -40,9 +43,9 @@ function AdminExternalPage() {
   );
 
   const paymentQrMap = {
-    GCASH: '/pix/gcashqr.png',
-    GOtyme: '/pix/nicogotymeqr.jpg',
-    UnionBank: '/pix/unionbankqr.jpg',
+    GCASH: gcashQr,
+    GOtyme: gotymeQr,
+    UnionBank: unionbankQr,
   };
 
   const selectedPaymentQr =
