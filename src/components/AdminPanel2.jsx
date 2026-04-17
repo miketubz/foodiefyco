@@ -827,7 +827,7 @@ export const AdminPanel2 = () => {
           <div className="flex flex-wrap gap-3">
             <Link to="/" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Front Store</Link>
             <Link to="/admin/external" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Admin Orders</Link>
-            <Link to="/admin/profit-calculator" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Profit Calculator</Link>
+            <Link to="/admin/profit-calculator" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Sales Management</Link>
             <Link to="/admin/archive" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">View Archive</Link>
             <Link to="/admin/menu" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Manage Menu</Link>
             <Link to="/admin/gallery" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Gallery</Link>
