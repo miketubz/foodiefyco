@@ -1002,13 +1002,30 @@ export const AdminPanel2 = () => {
                           </td>
                           <td className="px-3 py-2">{promo.starts_at ? new Date(promo.starts_at).toLocaleDateString() : '—'}</td>
                           <td className="px-3 py-2">{promo.ends_at ? new Date(promo.ends_at).toLocaleDateString() : '—'}</td>
-                          <td className="px-3 py-2 text-center">
-                            <button
-                              onClick={() => handleTogglePromoActive(promo)}
-                              className="rounded-md bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-900"
-                            >
-                              {promo.is_active ? 'Disable' : 'Enable'}
-                            </button>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap items-center justify-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleEditPromo(promo)}
+                                className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-700"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePromoActive(promo)}
+                                className="rounded-md bg-slate-800 px-3 py-2 text-xs text-white hover:bg-slate-900"
+                              >
+                                {promo.is_active ? 'Disable' : 'Enable'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePromo(promo)}
+                                className="rounded-md bg-red-600 px-3 py-2 text-xs text-white hover:bg-red-700"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -1091,9 +1108,32 @@ export const AdminPanel2 = () => {
                   <div className="mt-2 text-sm text-gray-600">Total: ₱{Number(order.totalAmount || 0).toFixed(2)}</div>
                   <div className="mt-2 text-sm text-gray-600">Status: {order.status}</div>
                   <div className="mt-2">{renderProofContent(order)}</div>
-                  <div className="mt-3 flex gap-2">
-                    <button onClick={() => handleArchiveSingle(order)} disabled={!canArchive || !archiveSchemaReady || bulkArchiving} className="rounded-md bg-purple-600 px-3 py-2 text-xs text-white disabled:bg-gray-300">Archive</button>
-                    <button onClick={() => setExpandedOrderId(expandedOrderId === order.orderId ? null : order.orderId)} className="rounded-md bg-gray-900 px-3 py-2 text-xs text-white">{expandedOrderId === order.orderId ? 'Hide' : 'View'}</button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setExpandedOrderId(expandedOrderId === order.orderId ? null : order.orderId)}
+                      className="rounded-md bg-gray-900 px-3 py-2 text-xs text-white"
+                    >
+                      {expandedOrderId === order.orderId ? 'Hide' : 'View'}
+                    </button>
+                    <button
+                      onClick={() => handlePrintReceipt(order)}
+                      className="rounded-md bg-sky-600 px-3 py-2 text-xs text-white hover:bg-sky-700"
+                    >
+                      Print
+                    </button>
+                    <button
+                      onClick={() => handlePdfReceipt(order)}
+                      className="rounded-md bg-emerald-600 px-3 py-2 text-xs text-white hover:bg-emerald-700"
+                    >
+                      PDF
+                    </button>
+                    <button
+                      onClick={() => handleArchiveSingle(order)}
+                      disabled={!canArchive || !archiveSchemaReady || bulkArchiving}
+                      className="rounded-md bg-purple-600 px-3 py-2 text-xs text-white disabled:bg-gray-300"
+                    >
+                      Archive
+                    </button>
                   </div>
                   {expandedOrderId === order.orderId && (
                     <div className="mt-3 rounded-md bg-gray-50 p-3 text-sm">
