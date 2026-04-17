@@ -378,7 +378,7 @@ const ProfitCalculator = () => {
               Admin Insights
             </p>
             <h1 className="mt-1 text-2xl font-bold text-slate-900 sm:text-3xl">
-              Profit Calculator
+              Profit Management
             </h1>
             <p className="mt-2 text-sm text-slate-500">
               Pick a date range to load sales automatically, then enter your cost to see profit.
