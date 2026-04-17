@@ -308,7 +308,7 @@ const ProfitCalculator = () => {
           </style>
         </head>
         <body>
-          <h1>Profit Calculator Report</h1>
+          <h1>Sales Dashboard and Calculator Report</h1>
           <div class="meta">
             <p><strong>Date Range:</strong> ${dateRange.start || '-'} to ${dateRange.end || '-'}</p>
           </div>
