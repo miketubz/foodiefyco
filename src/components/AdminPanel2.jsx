@@ -294,6 +294,12 @@ export const AdminPanel2 = () => {
   const [promoSuccess, setPromoSuccess] = useState('');
   const [promoForm, setPromoForm] = useState(DEFAULT_PROMO_FORM);
   const [editingPromoId, setEditingPromoId] = useState(null);
+  const [todaySalesSummary, setTodaySalesSummary] = useState({
+    paidSales: 0,
+    expectedSales: 0,
+    paidCount: 0,
+    expectedCount: 0,
+  });
 
   useEffect(() => {
     const loadAdmin = async () => {
@@ -303,6 +309,24 @@ export const AdminPanel2 = () => {
 
     loadAdmin();
     loadPromoCodes();
+    loadTodaySalesSummary();
+  }, []);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-orders-today-summary')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          loadTodaySalesSummary();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadPromoCodes = async () => {
@@ -541,6 +565,43 @@ export const AdminPanel2 = () => {
     });
   };
 
+  const loadTodaySalesSummary = async () => {
+    try {
+      const today = formatDateInput(new Date());
+
+      const { data, error: summaryError } = await supabase
+        .from('orders')
+        .select('total_amount, payment_status, status, created_at')
+        .gte('created_at', toIsoStart(today))
+        .lt('created_at', toIsoNextDay(today));
+
+      if (summaryError) throw summaryError;
+
+      const rows = data || [];
+      const nonCancelled = rows.filter((order) => String(order.status || '').toLowerCase() !== 'cancelled');
+      const paidRows = nonCancelled.filter((order) => String(order.payment_status || '').toLowerCase() === 'paid');
+
+      const paidSales = paidRows.reduce(
+        (sum, order) => sum + Number(order.total_amount || 0),
+        0
+      );
+
+      const expectedSales = nonCancelled.reduce(
+        (sum, order) => sum + Number(order.total_amount || 0),
+        0
+      );
+
+      setTodaySalesSummary({
+        paidSales,
+        expectedSales,
+        paidCount: paidRows.length,
+        expectedCount: nonCancelled.length,
+      });
+    } catch (err) {
+      console.error('Failed to load today sales summary:', err);
+    }
+  };
+
   const fetchOrders = async (activeFilters = filters) => {
     setLoading(true);
     setError('');
@@ -572,6 +633,7 @@ export const AdminPanel2 = () => {
       setError(err?.message || 'Failed to fetch orders');
     } finally {
       setLoading(false);
+      loadTodaySalesSummary();
     }
   };
 
