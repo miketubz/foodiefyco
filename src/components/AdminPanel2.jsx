@@ -578,22 +578,16 @@ export const AdminPanel2 = () => {
       if (summaryError) throw summaryError;
 
       const rows = data || [];
-      const nonCancelled = rows.filter((order) => String(order.status || '').toLowerCase() !== 'cancelled');
-      const paidRows = nonCancelled.filter((order) => String(order.payment_status || '').toLowerCase() === 'paid');
-
-      const paidSales = paidRows.reduce(
-        (sum, order) => sum + Number(order.total_amount || 0),
-        0
+      const nonCancelled = rows.filter(
+        (order) => String(order.status || '').toLowerCase() !== 'cancelled'
       );
-
-      const expectedSales = nonCancelled.reduce(
-        (sum, order) => sum + Number(order.total_amount || 0),
-        0
+      const paidRows = nonCancelled.filter(
+        (order) => String(order.payment_status || '').toLowerCase() === 'paid'
       );
 
       setTodaySalesSummary({
-        paidSales,
-        expectedSales,
+        paidSales: paidRows.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
+        expectedSales: nonCancelled.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
         paidCount: paidRows.length,
         expectedCount: nonCancelled.length,
       });
@@ -898,6 +892,32 @@ export const AdminPanel2 = () => {
               {showPromoManager ? 'Hide Promo Codes' : 'Manage Promo Codes'}
             </button>
             <button onClick={handleSignOut} className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">Sign Out</button>
+          </div>
+        </div>
+
+        <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-600">
+              Today Paid Sales
+            </p>
+            <p className="mt-3 text-3xl font-bold text-slate-900">
+              {formatCurrency(todaySalesSummary.paidSales)}
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              {todaySalesSummary.paidCount} paid order(s) today
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-white p-5 shadow-sm">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-orange-500">
+              Today Expected Sales
+            </p>
+            <p className="mt-3 text-3xl font-bold text-slate-900">
+              {formatCurrency(todaySalesSummary.expectedSales)}
+            </p>
+            <p className="mt-2 text-sm text-slate-500">
+              {todaySalesSummary.expectedCount} non-cancelled order(s) today
+            </p>
           </div>
         </div>
 
