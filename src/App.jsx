@@ -9,6 +9,7 @@ import FrontendPage from './pages/FrontendPage';
 import GalleryPage from './pages/GalleryPage';
 import MenuAdminPanel from './pages/MenuAdminPanel';
 import ProfitCalculator from './pages/ProfitCalculator';
+import AdminExternalPage from './pages/AdminExternalPage';
 
 function App() {
   return (
@@ -57,6 +58,15 @@ function App() {
         )}
       />
       <Route path="*" element={<Navigate to="/" replace />} />
+
+      <Route
+  path="/admin/external"
+  element={(
+    <RequireAdmin>
+      <AdminExternalPage />
+    </RequireAdmin>
+  )}
+/>
     </Routes>
   );
 }
