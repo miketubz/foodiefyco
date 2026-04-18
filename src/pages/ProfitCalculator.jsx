@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
+const BUSINESS_TIMEZONE = 'Asia/Manila';
+
 const formatCurrency = (value) =>
   `₱${Number(value || 0).toLocaleString('en-PH', {
     minimumFractionDigits: 2,
@@ -13,6 +15,21 @@ const formatNumber = (value) =>
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+
+const formatDateInput = (date) => {
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getBusinessDateKey = (value) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value));
 
 const getNetAmount = (order) => {
   const amount = parseFloat(order.total_amount) || 0;
@@ -31,7 +48,7 @@ const ProfitCalculator = () => {
   const [activePreset, setActivePreset] = useState('');
 
   const setToday = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatDateInput(new Date());
     setDateRange({ start: today, end: today });
     setActivePreset('today');
   };
@@ -39,7 +56,7 @@ const ProfitCalculator = () => {
   const setYesterday = () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const dateStr = yesterday.toISOString().split('T')[0];
+    const dateStr = formatDateInput(yesterday);
     setDateRange({ start: dateStr, end: dateStr });
     setActivePreset('yesterday');
   };
@@ -49,8 +66,8 @@ const ProfitCalculator = () => {
     const start = new Date();
     start.setDate(end.getDate() - 6);
     setDateRange({
-      start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0],
+      start: formatDateInput(start),
+      end: formatDateInput(end),
     });
     setActivePreset('last7');
   };
@@ -59,8 +76,8 @@ const ProfitCalculator = () => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     setDateRange({
-      start: start.toISOString().split('T')[0],
-      end: now.toISOString().split('T')[0],
+      start: formatDateInput(start),
+      end: formatDateInput(now),
     });
     setActivePreset('month');
   };
@@ -79,65 +96,77 @@ const ProfitCalculator = () => {
     setLoading(true);
     setError('');
 
-    const { data, error: fetchError } = await supabase
-      .from('orders')
-      .select('id, total_amount, discount_amount, status, payment_status, created_at')
-      .gte('created_at', `${dateRange.start}T00:00:00`)
-      .lte('created_at', `${dateRange.end}T23:59:59`)
-      .order('created_at', { ascending: true });
+    try {
+      const queryStart = new Date(`${dateRange.start}T00:00:00`);
+      queryStart.setDate(queryStart.getDate() - 1);
 
-    if (fetchError) {
+      const queryEnd = new Date(`${dateRange.end}T23:59:59`);
+      queryEnd.setDate(queryEnd.getDate() + 1);
+
+      const { data, error: fetchError } = await supabase
+        .from('orders')
+        .select('id, total_amount, discount_amount, status, payment_status, created_at')
+        .gte('created_at', queryStart.toISOString())
+        .lte('created_at', queryEnd.toISOString())
+        .order('created_at', { ascending: true });
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      const validOrders = (data || []).filter((order) => {
+        const status = String(order.status || '').toLowerCase();
+        if (status === 'cancelled') return false;
+
+        const businessDate = getBusinessDateKey(order.created_at);
+        return businessDate >= dateRange.start && businessDate <= dateRange.end;
+      });
+
+      const paidOrders = validOrders.filter(
+        (order) => String(order.payment_status || '').toLowerCase() === 'paid'
+      );
+
+      const unpaidOrders = validOrders.filter(
+        (order) => String(order.payment_status || '').toLowerCase() !== 'paid'
+      );
+
+      const totalPaidSales = paidOrders.reduce((sum, order) => sum + getNetAmount(order), 0);
+      const totalUnpaidPreview = unpaidOrders.reduce((sum, order) => sum + getNetAmount(order), 0);
+      const expectedIfAllPaid = totalPaidSales + totalUnpaidPreview;
+
+      const grouped = paidOrders.reduce((acc, order) => {
+        const dayKey = getBusinessDateKey(order.created_at);
+        const amount = getNetAmount(order);
+
+        if (!acc[dayKey]) {
+          acc[dayKey] = { date: dayKey, total: 0, orders: 0 };
+        }
+
+        acc[dayKey].total += amount;
+        acc[dayKey].orders += 1;
+        return acc;
+      }, {});
+
+      const dailyBreakdown = Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
+
+      setSalesData({
+        totalSales: totalPaidSales,
+        orderCount: paidOrders.length,
+        averageOrderValue: paidOrders.length ? totalPaidSales / paidOrders.length : 0,
+        unpaidPreviewSales: totalUnpaidPreview,
+        unpaidOrderCount: unpaidOrders.length,
+        expectedIfAllPaid,
+        validOrderCount: validOrders.length,
+        dailyBreakdown,
+        rawOrders: validOrders,
+      });
+    } catch (fetchError) {
       console.error(fetchError);
       setError(fetchError.message || 'Failed to fetch sales data.');
       setSalesData(null);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const validOrders = (data || []).filter(
-      (order) => String(order.status || '').toLowerCase() !== 'cancelled'
-    );
-
-    const paidOrders = validOrders.filter(
-      (order) => String(order.payment_status || '').toLowerCase() === 'paid'
-    );
-
-    const unpaidOrders = validOrders.filter(
-      (order) => String(order.payment_status || '').toLowerCase() !== 'paid'
-    );
-
-    const totalPaidSales = paidOrders.reduce((sum, order) => sum + getNetAmount(order), 0);
-    const totalUnpaidPreview = unpaidOrders.reduce((sum, order) => sum + getNetAmount(order), 0);
-    const expectedIfAllPaid = totalPaidSales + totalUnpaidPreview;
-
-    const grouped = paidOrders.reduce((acc, order) => {
-      const dayKey = new Date(order.created_at).toISOString().split('T')[0];
-      const amount = getNetAmount(order);
-
-      if (!acc[dayKey]) {
-        acc[dayKey] = { date: dayKey, total: 0, orders: 0 };
-      }
-
-      acc[dayKey].total += amount;
-      acc[dayKey].orders += 1;
-      return acc;
-    }, {});
-
-    const dailyBreakdown = Object.values(grouped);
-
-    setSalesData({
-      totalSales: totalPaidSales,
-      orderCount: paidOrders.length,
-      averageOrderValue: paidOrders.length ? totalPaidSales / paidOrders.length : 0,
-      unpaidPreviewSales: totalUnpaidPreview,
-      unpaidOrderCount: unpaidOrders.length,
-      expectedIfAllPaid,
-      validOrderCount: validOrders.length,
-      dailyBreakdown,
-      rawOrders: validOrders,
-    });
-
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -193,8 +222,9 @@ const ProfitCalculator = () => {
   const exportRows = useMemo(() => {
     if (!salesData) return [];
 
-    const summaryRows = [
+    return [
       ['Profit Calculator Report'],
+      ['Business Timezone', BUSINESS_TIMEZONE],
       ['Start Date', dateRange.start || ''],
       ['End Date', dateRange.end || ''],
       ['Paid Sales', formatNumber(salesData.totalSales)],
@@ -217,8 +247,6 @@ const ProfitCalculator = () => {
         formatNumber(day.total),
       ]),
     ];
-
-    return summaryRows;
   }, [
     salesData,
     dateRange.start,
@@ -265,6 +293,7 @@ const ProfitCalculator = () => {
 
   const handleExportExcel = () => {
     if (!salesData) return;
+
     const tsv = exportRows
       .map((row) => row.map((cell) => String(cell ?? '')).join('\t'))
       .join('\n');
@@ -354,6 +383,7 @@ const ProfitCalculator = () => {
         <body>
           <h1>Sales Dashboard and Calculator Report</h1>
           <div class="meta">
+            <p><strong>Business Timezone:</strong> ${BUSINESS_TIMEZONE}</p>
             <p><strong>Date Range:</strong> ${dateRange.start || '-'} to ${dateRange.end || '-'}</p>
           </div>
 
@@ -790,7 +820,7 @@ const ProfitCalculator = () => {
                       <p className="mt-1 text-sm text-slate-600">
                         {!dateRange.start || !dateRange.end
                           ? 'Pick dates to load sales cards and chart.'
-                          : 'Actual sales use paid status. Unpaid preview is shown separately.'}
+                          : `Date filtering follows ${BUSINESS_TIMEZONE} business dates.`}
                       </p>
                     </div>
                   </div>
