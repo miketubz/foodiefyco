@@ -311,7 +311,29 @@ export const AdminPanel2 = () => {
 
     loadAdmin();
     loadPromoCodes();
+    loadSalesSummary();
   }, []);
+
+  useEffect(() => {
+    loadSalesSummary();
+  }, [salesRange]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-sales-summary-refresh')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          loadSalesSummary();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [salesRange]);
 
   const loadPromoCodes = async () => {
     setPromoLoading(true);
@@ -340,6 +362,103 @@ export const AdminPanel2 = () => {
     setPromoForm(DEFAULT_PROMO_FORM);
     setEditingPromoId(null);
   };
+
+  const loadSalesSummary = async () => {
+    try {
+      const { data, error: summaryError } = await supabase
+        .from('orders')
+        .select('total_amount, payment_status, status, created_at')
+        .order('created_at', { ascending: false })
+        .limit(500);
+
+      if (summaryError) throw summaryError;
+
+      const rows = (data || []).filter(
+        (order) => String(order.status || '').toLowerCase() !== 'cancelled'
+      );
+
+      const today = new Date();
+      const todayKey = formatDateInput(today);
+
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      const yesterdayKey = formatDateInput(yesterday);
+
+      const currentRangeRows = rows.filter((order) => {
+        const orderDateKey = formatDateInput(new Date(order.created_at));
+
+        if (salesRange === 'today') {
+          return orderDateKey === todayKey;
+        }
+
+        if (salesRange === 'yesterday') {
+          return orderDateKey === yesterdayKey;
+        }
+
+        const sevenDayStart = new Date();
+        sevenDayStart.setDate(today.getDate() - 6);
+        const sevenDayStartKey = formatDateInput(sevenDayStart);
+
+        return orderDateKey >= sevenDayStartKey && orderDateKey <= todayKey;
+      });
+
+      const previousRangeRows = rows.filter((order) => {
+        const orderDateKey = formatDateInput(new Date(order.created_at));
+
+        if (salesRange === 'today') {
+          return orderDateKey === yesterdayKey;
+        }
+
+        if (salesRange === 'yesterday') {
+          const previousDay = new Date();
+          previousDay.setDate(today.getDate() - 2);
+          const previousDayKey = formatDateInput(previousDay);
+          return orderDateKey === previousDayKey;
+        }
+
+        const previousRangeEnd = new Date();
+        previousRangeEnd.setDate(today.getDate() - 7);
+        const previousRangeStart = new Date();
+        previousRangeStart.setDate(today.getDate() - 13);
+
+        const previousRangeStartKey = formatDateInput(previousRangeStart);
+        const previousRangeEndKey = formatDateInput(previousRangeEnd);
+
+        return orderDateKey >= previousRangeStartKey && orderDateKey <= previousRangeEndKey;
+      });
+
+      const paidRows = currentRangeRows.filter(
+        (order) => String(order.payment_status || '').toLowerCase() === 'paid'
+      );
+
+      const paidSales = paidRows.reduce(
+        (sum, order) => sum + Number(order.total_amount || 0),
+        0
+      );
+
+      const expectedSales = currentRangeRows.reduce(
+        (sum, order) => sum + Number(order.total_amount || 0),
+        0
+      );
+
+      const previousExpectedSales = previousRangeRows.reduce(
+        (sum, order) => sum + Number(order.total_amount || 0),
+        0
+      );
+
+      setTodaySalesSummary({
+        paidSales,
+        expectedSales,
+        paidCount: paidRows.length,
+        expectedCount: currentRangeRows.length,
+      });
+
+      setPreviousSales(previousExpectedSales);
+    } catch (err) {
+      console.error('Failed to load sales summary:', err);
+    }
+  };
+
 
   const handleCreatePromoCode = async (e) => {
     e.preventDefault();
@@ -580,6 +699,7 @@ export const AdminPanel2 = () => {
       setError(err?.message || 'Failed to fetch orders');
     } finally {
       setLoading(false);
+      loadSalesSummary();
     }
   };
 
