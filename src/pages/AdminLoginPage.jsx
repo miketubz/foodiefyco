@@ -142,9 +142,9 @@ export default function AdminLoginPage() {
         </form>
 
         <div className="mt-6 rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
-          <p className="font-semibold text-gray-800">For now</p>
+          <p className="font-semibold text-gray-800">Get Access:</p>
           <p className="mt-1">
-            Contact Admin to register .
+            Contact Admin Mike Tubel to register .
           </p>
         </div>
 
