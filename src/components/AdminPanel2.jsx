@@ -367,7 +367,7 @@ export const AdminPanel2 = () => {
     try {
       const { data, error: summaryError } = await supabase
         .from('orders')
-        .select('total_amount, payment_status, status, created_at')
+        .select('total_amount, discount_amount, payment_status, status, created_at')
         .order('created_at', { ascending: false })
         .limit(500);
 
@@ -431,18 +431,24 @@ export const AdminPanel2 = () => {
         (order) => String(order.payment_status || '').toLowerCase() === 'paid'
       );
 
+      const getNetSales = (order) =>
+        Math.max(
+          0,
+          Number(order.total_amount || 0) - Number(order.discount_amount || 0)
+        );
+
       const paidSales = paidRows.reduce(
-        (sum, order) => sum + Number(order.total_amount || 0),
+        (sum, order) => sum + getNetSales(order),
         0
       );
 
       const expectedSales = currentRangeRows.reduce(
-        (sum, order) => sum + Number(order.total_amount || 0),
+        (sum, order) => sum + getNetSales(order),
         0
       );
 
       const previousExpectedSales = previousRangeRows.reduce(
-        (sum, order) => sum + Number(order.total_amount || 0),
+        (sum, order) => sum + getNetSales(order),
         0
       );
 
