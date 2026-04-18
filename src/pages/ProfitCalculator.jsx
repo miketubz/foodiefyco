@@ -14,6 +14,12 @@ const formatNumber = (value) =>
     maximumFractionDigits: 2,
   });
 
+const getNetAmount = (order) => {
+  const amount = parseFloat(order.total_amount) || 0;
+  const discount = parseFloat(order.discount_amount) || 0;
+  return Math.max(0, amount - discount);
+};
+
 const ProfitCalculator = () => {
   const navigate = useNavigate();
 
@@ -75,8 +81,7 @@ const ProfitCalculator = () => {
 
     const { data, error: fetchError } = await supabase
       .from('orders')
-      .select('id, total_amount, discount_amount, status, created_at')
-      .eq('status', 'completed')
+      .select('id, total_amount, discount_amount, status, payment_status, created_at')
       .gte('created_at', `${dateRange.start}T00:00:00`)
       .lte('created_at', `${dateRange.end}T23:59:59`)
       .order('created_at', { ascending: true });
@@ -89,18 +94,25 @@ const ProfitCalculator = () => {
       return;
     }
 
-    const totalSales = data.reduce((sum, order) => {
-      const amount = parseFloat(order.total_amount) || 0;
-      const discount = parseFloat(order.discount_amount) || 0;
-      return sum + Math.max(0, amount - discount);
-    }, 0);
+    const validOrders = (data || []).filter(
+      (order) => String(order.status || '').toLowerCase() !== 'cancelled'
+    );
 
-    const grouped = data.reduce((acc, order) => {
+    const paidOrders = validOrders.filter(
+      (order) => String(order.payment_status || '').toLowerCase() === 'paid'
+    );
+
+    const unpaidOrders = validOrders.filter(
+      (order) => String(order.payment_status || '').toLowerCase() !== 'paid'
+    );
+
+    const totalPaidSales = paidOrders.reduce((sum, order) => sum + getNetAmount(order), 0);
+    const totalUnpaidPreview = unpaidOrders.reduce((sum, order) => sum + getNetAmount(order), 0);
+    const expectedIfAllPaid = totalPaidSales + totalUnpaidPreview;
+
+    const grouped = paidOrders.reduce((acc, order) => {
       const dayKey = new Date(order.created_at).toISOString().split('T')[0];
-      const amount = Math.max(
-        0,
-        (parseFloat(order.total_amount) || 0) - (parseFloat(order.discount_amount) || 0)
-      );
+      const amount = getNetAmount(order);
 
       if (!acc[dayKey]) {
         acc[dayKey] = { date: dayKey, total: 0, orders: 0 };
@@ -114,11 +126,15 @@ const ProfitCalculator = () => {
     const dailyBreakdown = Object.values(grouped);
 
     setSalesData({
-      totalSales,
-      orderCount: data.length,
-      averageOrderValue: data.length ? totalSales / data.length : 0,
+      totalSales: totalPaidSales,
+      orderCount: paidOrders.length,
+      averageOrderValue: paidOrders.length ? totalPaidSales / paidOrders.length : 0,
+      unpaidPreviewSales: totalUnpaidPreview,
+      unpaidOrderCount: unpaidOrders.length,
+      expectedIfAllPaid,
+      validOrderCount: validOrders.length,
       dailyBreakdown,
-      rawOrders: data,
+      rawOrders: validOrders,
     });
 
     setLoading(false);
@@ -137,12 +153,20 @@ const ProfitCalculator = () => {
         margin: 0,
         highestDay: null,
         chartMax: 0,
+        projectedProfitIfAllPaid: 0,
+        projectedMarginIfAllPaid: 0,
       };
     }
 
     const grossProfit = salesData.totalSales - investmentNum;
     const margin =
       salesData.totalSales > 0 ? (grossProfit / salesData.totalSales) * 100 : 0;
+
+    const projectedProfitIfAllPaid = salesData.expectedIfAllPaid - investmentNum;
+    const projectedMarginIfAllPaid =
+      salesData.expectedIfAllPaid > 0
+        ? (projectedProfitIfAllPaid / salesData.expectedIfAllPaid) * 100
+        : 0;
 
     const highestDay = salesData.dailyBreakdown.reduce((max, day) => {
       if (!max || day.total > max.total) return day;
@@ -159,6 +183,8 @@ const ProfitCalculator = () => {
       margin,
       highestDay,
       chartMax,
+      projectedProfitIfAllPaid,
+      projectedMarginIfAllPaid,
     };
   }, [salesData, investmentNum]);
 
@@ -171,15 +197,20 @@ const ProfitCalculator = () => {
       ['Profit Calculator Report'],
       ['Start Date', dateRange.start || ''],
       ['End Date', dateRange.end || ''],
-      ['Total Sales', formatNumber(salesData.totalSales)],
-      ['Order Count', salesData.orderCount],
-      ['Average Order Value', formatNumber(salesData.averageOrderValue)],
+      ['Paid Sales', formatNumber(salesData.totalSales)],
+      ['Paid Order Count', salesData.orderCount],
+      ['Average Paid Order Value', formatNumber(salesData.averageOrderValue)],
+      ['Unpaid Preview Sales', formatNumber(salesData.unpaidPreviewSales)],
+      ['Unpaid Order Count', salesData.unpaidOrderCount],
+      ['Expected If All Paid', formatNumber(salesData.expectedIfAllPaid)],
       ['Investment / Cost', formatNumber(investmentNum)],
-      ['Net Profit', formatNumber(computed.grossProfit)],
-      ['Margin %', computed.margin.toFixed(2)],
+      ['Net Profit (Paid Only)', formatNumber(computed.grossProfit)],
+      ['Margin % (Paid Only)', computed.margin.toFixed(2)],
+      ['Projected Profit If All Paid', formatNumber(computed.projectedProfitIfAllPaid)],
+      ['Projected Margin If All Paid %', computed.projectedMarginIfAllPaid.toFixed(2)],
       [],
-      ['Daily Breakdown'],
-      ['Date', 'Orders', 'Sales Total'],
+      ['Paid Sales Daily Breakdown'],
+      ['Date', 'Paid Orders', 'Paid Sales Total'],
       ...salesData.dailyBreakdown.map((day) => [
         day.date,
         day.orders,
@@ -188,7 +219,16 @@ const ProfitCalculator = () => {
     ];
 
     return summaryRows;
-  }, [salesData, dateRange.start, dateRange.end, investmentNum, computed.grossProfit, computed.margin]);
+  }, [
+    salesData,
+    dateRange.start,
+    dateRange.end,
+    investmentNum,
+    computed.grossProfit,
+    computed.margin,
+    computed.projectedProfitIfAllPaid,
+    computed.projectedMarginIfAllPaid,
+  ]);
 
   const downloadFile = (content, filename, type) => {
     const blob = new Blob([content], { type });
@@ -216,7 +256,11 @@ const ProfitCalculator = () => {
       )
       .join('\n');
 
-    downloadFile(csv, `profit-report-${dateRange.start || 'start'}-to-${dateRange.end || 'end'}.csv`, 'text/csv;charset=utf-8;');
+    downloadFile(
+      csv,
+      `profit-report-${dateRange.start || 'start'}-to-${dateRange.end || 'end'}.csv`,
+      'text/csv;charset=utf-8;'
+    );
   };
 
   const handleExportExcel = () => {
@@ -317,40 +361,48 @@ const ProfitCalculator = () => {
             <h2>Summary</h2>
             <div class="grid">
               <div class="card">
-                <div class="label">Total Sales</div>
+                <div class="label">Paid Sales</div>
                 <div class="value">₱${formatNumber(salesData.totalSales)}</div>
               </div>
               <div class="card">
-                <div class="label">Order Count</div>
+                <div class="label">Paid Order Count</div>
                 <div class="value">${salesData.orderCount}</div>
               </div>
               <div class="card">
-                <div class="label">Average Order Value</div>
+                <div class="label">Average Paid Order Value</div>
                 <div class="value">₱${formatNumber(salesData.averageOrderValue)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Unpaid Preview Sales</div>
+                <div class="value">₱${formatNumber(salesData.unpaidPreviewSales)}</div>
+              </div>
+              <div class="card">
+                <div class="label">Expected If All Paid</div>
+                <div class="value">₱${formatNumber(salesData.expectedIfAllPaid)}</div>
               </div>
               <div class="card">
                 <div class="label">Investment / Cost</div>
                 <div class="value">₱${formatNumber(investmentNum)}</div>
               </div>
               <div class="card">
-                <div class="label">Net Profit</div>
+                <div class="label">Net Profit (Paid Only)</div>
                 <div class="value">₱${formatNumber(computed.grossProfit)}</div>
               </div>
               <div class="card">
-                <div class="label">Margin</div>
-                <div class="value">${computed.margin.toFixed(2)}%</div>
+                <div class="label">Projected Profit If All Paid</div>
+                <div class="value">₱${formatNumber(computed.projectedProfitIfAllPaid)}</div>
               </div>
             </div>
           </div>
 
           <div class="table-wrap">
-            <h2>Daily Breakdown</h2>
+            <h2>Paid Sales Daily Breakdown</h2>
             <table>
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Orders</th>
-                  <th>Sales Total</th>
+                  <th>Paid Orders</th>
+                  <th>Paid Sales Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -381,7 +433,7 @@ const ProfitCalculator = () => {
               Profit Management
             </h1>
             <p className="mt-2 text-sm text-slate-500">
-              Pick a date range to load sales automatically, then enter your cost to see profit.
+              Paid sales are counted as actual sales. Unpaid orders are shown separately as a collection preview.
             </p>
           </div>
 
@@ -506,34 +558,44 @@ const ProfitCalculator = () => {
           </section>
 
           <section className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">Total Sales</p>
+                <p className="text-sm font-medium text-slate-500">Paid Sales</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900">
                   {loading ? 'Loading...' : formatCurrency(salesData?.totalSales || 0)}
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Completed orders only
+                  Paid orders only
                 </p>
               </div>
 
               <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">Order Count</p>
+                <p className="text-sm font-medium text-slate-500">Paid Order Count</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900">
                   {loading ? 'Loading...' : salesData?.orderCount || 0}
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Orders in selected range
+                  Paid orders in selected range
                 </p>
               </div>
 
               <div className="rounded-2xl bg-white p-5 shadow-sm">
-                <p className="text-sm font-medium text-slate-500">Avg. Order Value</p>
+                <p className="text-sm font-medium text-slate-500">Avg. Paid Order Value</p>
                 <p className="mt-2 text-2xl font-bold text-slate-900">
                   {loading ? 'Loading...' : formatCurrency(salesData?.averageOrderValue || 0)}
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Sales divided by orders
+                  Paid sales divided by paid orders
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-white p-5 shadow-sm">
+                <p className="text-sm font-medium text-slate-500">Unpaid Preview</p>
+                <p className="mt-2 text-2xl font-bold text-amber-600">
+                  {loading ? 'Loading...' : formatCurrency(salesData?.unpaidPreviewSales || 0)}
+                </p>
+                <p className="mt-2 text-sm text-slate-500">
+                  {loading ? 'Loading...' : salesData?.unpaidOrderCount || 0} unpaid order(s)
                 </p>
               </div>
 
@@ -547,7 +609,7 @@ const ProfitCalculator = () => {
                   {loading ? 'Loading...' : formatCurrency(computed.grossProfit)}
                 </p>
                 <p className="mt-2 text-sm text-slate-500">
-                  Sales minus investment
+                  Paid sales minus investment
                 </p>
               </div>
             </div>
@@ -557,10 +619,10 @@ const ProfitCalculator = () => {
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-slate-900">
-                      Sales Trend
+                      Paid Sales Trend
                     </h2>
                     <p className="text-sm text-slate-500">
-                      Daily completed sales for the selected range
+                      Daily paid sales for the selected range
                     </p>
                   </div>
                   {dateRange.start && dateRange.end && (
@@ -580,7 +642,7 @@ const ProfitCalculator = () => {
                   </div>
                 ) : !canShowResults || salesData.dailyBreakdown.length === 0 ? (
                   <div className="mt-6 rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
-                    No completed orders found for this range.
+                    No paid orders found for this range.
                   </div>
                 ) : (
                   <div className="mt-6 space-y-4">
@@ -593,7 +655,7 @@ const ProfitCalculator = () => {
                           <div className="mb-2 flex items-center justify-between gap-3 text-sm">
                             <div>
                               <p className="font-semibold text-slate-800">{day.date}</p>
-                              <p className="text-slate-500">{day.orders} order(s)</p>
+                              <p className="text-slate-500">{day.orders} paid order(s)</p>
                             </div>
                             <p className="font-semibold text-slate-900">
                               {formatCurrency(day.total)}
@@ -619,9 +681,21 @@ const ProfitCalculator = () => {
                   </h2>
                   <div className="mt-5 space-y-3">
                     <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                      <span className="text-sm text-slate-600">Sales</span>
+                      <span className="text-sm text-slate-600">Paid Sales</span>
                       <span className="font-semibold text-slate-900">
                         {formatCurrency(salesData?.totalSales || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                      <span className="text-sm text-slate-600">Unpaid Preview</span>
+                      <span className="font-semibold text-amber-700">
+                        {formatCurrency(salesData?.unpaidPreviewSales || 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                      <span className="text-sm text-slate-600">Expected If All Paid</span>
+                      <span className="font-semibold text-slate-900">
+                        {formatCurrency(salesData?.expectedIfAllPaid || 0)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
@@ -631,7 +705,7 @@ const ProfitCalculator = () => {
                       </span>
                     </div>
                     <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                      <span className="text-sm text-slate-600">Margin</span>
+                      <span className="text-sm text-slate-600">Margin (Paid Only)</span>
                       <span
                         className={`font-semibold ${
                           computed.margin >= 0 ? 'text-emerald-600' : 'text-red-600'
@@ -640,14 +714,34 @@ const ProfitCalculator = () => {
                         {computed.margin.toFixed(2)}%
                       </span>
                     </div>
+                    <div className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                      <span className="text-sm text-slate-600">Projected Margin</span>
+                      <span
+                        className={`font-semibold ${
+                          computed.projectedMarginIfAllPaid >= 0 ? 'text-emerald-600' : 'text-red-600'
+                        }`}
+                      >
+                        {computed.projectedMarginIfAllPaid.toFixed(2)}%
+                      </span>
+                    </div>
                     <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-4">
-                      <span className="text-sm font-semibold text-slate-700">Net Profit</span>
+                      <span className="text-sm font-semibold text-slate-700">Net Profit (Paid Only)</span>
                       <span
                         className={`text-xl font-bold ${
                           computed.grossProfit >= 0 ? 'text-emerald-600' : 'text-red-600'
                         }`}
                       >
                         {formatCurrency(computed.grossProfit)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
+                      <span className="text-sm font-semibold text-amber-800">Projected Profit If All Paid</span>
+                      <span
+                        className={`text-xl font-bold ${
+                          computed.projectedProfitIfAllPaid >= 0 ? 'text-emerald-700' : 'text-red-700'
+                        }`}
+                      >
+                        {formatCurrency(computed.projectedProfitIfAllPaid)}
                       </span>
                     </div>
                   </div>
@@ -659,14 +753,26 @@ const ProfitCalculator = () => {
                   </h2>
                   <div className="mt-5 space-y-3">
                     <div className="rounded-xl bg-slate-50 px-4 py-3">
-                      <p className="text-sm text-slate-500">Best sales day</p>
+                      <p className="text-sm text-slate-500">Best paid sales day</p>
                       <p className="mt-1 font-semibold text-slate-900">
                         {computed.highestDay ? computed.highestDay.date : 'No data yet'}
                       </p>
                       <p className="mt-1 text-sm text-slate-600">
                         {computed.highestDay
-                          ? `${formatCurrency(computed.highestDay.total)} from ${computed.highestDay.orders} order(s)`
-                          : 'Select a date range with completed orders.'}
+                          ? `${formatCurrency(computed.highestDay.total)} from ${computed.highestDay.orders} paid order(s)`
+                          : 'Select a date range with paid orders.'}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-50 px-4 py-3">
+                      <p className="text-sm text-slate-500">Collection preview</p>
+                      <p className="mt-1 font-semibold text-slate-900">
+                        {salesData?.unpaidOrderCount
+                          ? `${salesData.unpaidOrderCount} unpaid order(s)`
+                          : 'No unpaid orders'}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        If these are collected, potential added sales is {formatCurrency(salesData?.unpaidPreviewSales || 0)}.
                       </p>
                     </div>
 
@@ -677,14 +783,14 @@ const ProfitCalculator = () => {
                           ? 'Waiting for dates'
                           : loading
                           ? 'Loading data'
-                          : salesData?.orderCount
+                          : salesData?.validOrderCount
                           ? 'Ready'
                           : 'No orders'}
                       </p>
                       <p className="mt-1 text-sm text-slate-600">
                         {!dateRange.start || !dateRange.end
                           ? 'Pick dates to load sales cards and chart.'
-                          : 'Your summary updates automatically.'}
+                          : 'Actual sales use paid status. Unpaid preview is shown separately.'}
                       </p>
                     </div>
                   </div>
