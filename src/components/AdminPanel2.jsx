@@ -1207,7 +1207,7 @@ export const AdminPanel2 = () => {
                         <div className="mt-4 flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={() => handleEditPromo(promo)}
+                            onClick={() => handleEditPromoCode(promo)}
                             className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-700"
                           >
                             Edit
@@ -1221,7 +1221,7 @@ export const AdminPanel2 = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() => handleDeletePromo(promo)}
+                            onClick={() => handleDeletePromoCode(promo)}
                             className="rounded-md bg-red-600 px-3 py-2 text-xs text-white hover:bg-red-700"
                           >
                             Delete
@@ -1265,7 +1265,7 @@ export const AdminPanel2 = () => {
                               <div className="flex flex-wrap items-center justify-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => handleEditPromo(promo)}
+                                  onClick={() => handleEditPromoCode(promo)}
                                   className="rounded-md bg-blue-600 px-3 py-2 text-xs text-white hover:bg-blue-700"
                                 >
                                   Edit
@@ -1279,7 +1279,7 @@ export const AdminPanel2 = () => {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeletePromo(promo)}
+                                  onClick={() => handleDeletePromoCode(promo)}
                                   className="rounded-md bg-red-600 px-3 py-2 text-xs text-white hover:bg-red-700"
                                 >
                                   Delete
