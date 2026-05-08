@@ -78,6 +78,12 @@ const getTrustedAppBaseUrl = (req) => {
   return normalizeBaseUrl(getBaseUrlFromRequest(req));
 };
 
+const generateTempPassword = () => {
+  const random = Math.random().toString(36).slice(2);
+  const stamp = Date.now().toString(36);
+  return `Tmp!${random}${stamp}`.slice(0, 24);
+};
+
 const mapUser = (user) => ({
   id: user.id,
   email: user.email || '',
@@ -230,24 +236,30 @@ export default async function handler(req, res) {
 
   if (action === 'register') {
     const email = String(body.email || '').trim().toLowerCase();
-    const password = String(body.password || '');
     const role = normalizeRole(body.role);
-    const emailConfirm = Boolean(body.emailConfirm);
+    const customMessage = String(body.customMessage || '').trim().slice(0, 300);
+    const appBaseUrl = getTrustedAppBaseUrl(req);
+    const redirectQuery = new URLSearchParams({
+      mode: 'new-user',
+      ...(customMessage ? { welcome: customMessage } : {}),
+    });
+    const redirectTo = appBaseUrl ? `${appBaseUrl}/admin/login?${redirectQuery.toString()}` : undefined;
 
     if (!email) {
       return json(res, 400, { error: 'Email is required.' });
     }
 
-    if (password.length < 8) {
-      return json(res, 400, { error: 'Password must be at least 8 characters.' });
-    }
-
     const { data, error } = await serviceClient.auth.admin.createUser({
       email,
-      password,
-      email_confirm: emailConfirm,
-      user_metadata: { role },
-      app_metadata: { role },
+      password: generateTempPassword(),
+      email_confirm: true,
+      user_metadata: {
+        role,
+        onboarding_message: customMessage,
+      },
+      app_metadata: {
+        role,
+      },
     });
 
     if (error) {
@@ -257,8 +269,20 @@ export default async function handler(req, res) {
     const userId = data?.user?.id;
     await syncProfileAdminFlag(serviceClient, userId, role);
 
+    const { error: resetError } = await serviceClient.auth.resetPasswordForEmail(email, {
+      redirectTo,
+    });
+
+    if (resetError) {
+      return json(res, 200, {
+        message: `User created for ${email}, but reset email failed. Use Send Reset action manually.`,
+        warning: resetError.message,
+        user: data?.user ? mapUser(data.user) : null,
+      });
+    }
+
     return json(res, 200, {
-      message: `User created for ${email}.`,
+      message: `User created for ${email}. Reset-password email has been sent.`,
       user: data?.user ? mapUser(data.user) : null,
     });
   }

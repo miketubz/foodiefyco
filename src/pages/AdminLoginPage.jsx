@@ -6,6 +6,9 @@ import useAdminAuth from '../hooks/useAdminAuth.js';
 export default function AdminLoginPage() {
   const location = useLocation();
   const { loading, isAdmin, session, signOut } = useAdminAuth();
+  const searchParams = new URLSearchParams(location.search);
+  const onboardingMode = String(searchParams.get('mode') || '').trim();
+  const onboardingMessage = String(searchParams.get('welcome') || '').trim();
 
   const redirectTo = location.state?.from || '/admin';
 
@@ -99,6 +102,15 @@ export default function AdminLoginPage() {
         {errorMessage && (
           <div className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
             {errorMessage}
+          </div>
+        )}
+
+        {(onboardingMode === 'new-user' || onboardingMessage) && (
+          <div className="mb-4 rounded-lg border border-blue-300 bg-blue-50 p-4 text-sm text-blue-800">
+            <p className="font-semibold">Welcome to FoodiefyCo Admin</p>
+            <p className="mt-1">
+              {onboardingMessage || 'Your account is ready. Set a new password using the link from your email, then sign in.'}
+            </p>
           </div>
         )}
 

@@ -19,16 +19,10 @@ const ROLE_RANK = {
   viewer: 4,
 };
 
-const DEFAULT_INVITE_FORM = {
-  email: '',
-  role: 'viewer',
-};
-
 const DEFAULT_REGISTER_FORM = {
   email: '',
-  password: '',
   role: 'viewer',
-  emailConfirm: true,
+  customMessage: '',
 };
 
 const formatDateTime = (value) => {
@@ -52,7 +46,6 @@ const AdminUsersPage = () => {
   const [working, setWorking] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [inviteForm, setInviteForm] = useState(DEFAULT_INVITE_FORM);
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER_FORM);
   const [resetEmail, setResetEmail] = useState('');
   const [roleDraftByUserId, setRoleDraftByUserId] = useState({});
@@ -145,37 +138,6 @@ const AdminUsersPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleInviteUser = async (e) => {
-    e.preventDefault();
-    setWorking(true);
-    setSuccessMessage('');
-    setErrorMessage('');
-
-    try {
-      const email = String(inviteForm.email || '').trim().toLowerCase();
-      if (!email) {
-        throw new Error('Invite email is required.');
-      }
-
-      const redirectTo = `${window.location.origin}/admin/login`;
-
-      const result = await callUsersApi('POST', {
-        action: 'invite',
-        email,
-        role: inviteForm.role,
-        redirectTo,
-      });
-
-      setSuccessMessage(result.message || 'Invite sent successfully.');
-      setInviteForm(DEFAULT_INVITE_FORM);
-      await loadUsers();
-    } catch (err) {
-      setErrorMessage(err.message || 'Failed to invite user.');
-    } finally {
-      setWorking(false);
-    }
-  };
-
   const handleRegisterUser = async (e) => {
     e.preventDefault();
     setWorking(true);
@@ -184,25 +146,20 @@ const AdminUsersPage = () => {
 
     try {
       const email = String(registerForm.email || '').trim().toLowerCase();
-      const password = String(registerForm.password || '');
+      const customMessage = String(registerForm.customMessage || '').trim();
 
       if (!email) {
         throw new Error('Register email is required.');
       }
 
-      if (password.length < 8) {
-        throw new Error('Password must be at least 8 characters.');
-      }
-
       const result = await callUsersApi('POST', {
         action: 'register',
         email,
-        password,
         role: registerForm.role,
-        emailConfirm: registerForm.emailConfirm,
+        customMessage,
       });
 
-      setSuccessMessage(result.message || 'User created.');
+      setSuccessMessage(result.message || 'User created and reset email sent.');
       setRegisterForm(DEFAULT_REGISTER_FORM);
       await loadUsers();
     } catch (err) {
@@ -354,11 +311,10 @@ const AdminUsersPage = () => {
               </p>
 
               <div className="mt-4 space-y-3 text-sm text-gray-700">
-                <p><span className="font-semibold">Invite User:</span> Sends an email invite so the user sets their own password.</p>
-                <p><span className="font-semibold">Register User:</span> Creates a user directly with temporary password.</p>
+                <p><span className="font-semibold">Register User:</span> Creates account and sends reset-password email immediately.</p>
                 <p><span className="font-semibold">Send Reset:</span> Sends password reset link to an existing user email.</p>
                 <p><span className="font-semibold">Save Role:</span> Updates only that selected user role.</p>
-                <p><span className="font-semibold">Safety:</span> No existing user is changed unless you click Invite, Create, Send Reset, or Save Role.</p>
+                <p><span className="font-semibold">Safety:</span> No existing user is changed unless you click Create, Send Reset, Save Role, or Remove Selected.</p>
               </div>
 
               <div className="mt-5 flex justify-end">
@@ -374,63 +330,10 @@ const AdminUsersPage = () => {
           </div>
         )}
 
-        <div className="mb-6 grid gap-6 lg:grid-cols-2">
-          <section className="rounded-2xl bg-white p-6 shadow">
-            <h2 className="text-xl font-semibold text-gray-800">Invite User</h2>
-            <p className="mt-1 text-sm text-gray-500">Sends an invite email so the user can set credentials securely.</p>
-
-            <form onSubmit={handleInviteUser} className="mt-4 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">Email</label>
-                <input
-                  type="email"
-                  name="invite_user_email"
-                  autoComplete="off"
-                  value={inviteForm.email}
-                  onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  placeholder="user@example.com"
-                  disabled={working}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">Role</label>
-                <select
-                  value={inviteForm.role}
-                  onChange={(e) => setInviteForm((prev) => ({ ...prev, role: e.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  disabled={working}
-                >
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role.value} value={role.value}>{role.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="submit"
-                  className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:bg-gray-300"
-                  disabled={working}
-                >
-                  Send Invite
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInviteForm(DEFAULT_INVITE_FORM)}
-                  className="rounded-md bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200 disabled:bg-gray-200"
-                  disabled={working}
-                >
-                  Clear
-                </button>
-              </div>
-            </form>
-          </section>
-
+        <div className="mb-6">
           <section className="rounded-2xl bg-white p-6 shadow">
             <h2 className="text-xl font-semibold text-gray-800">Register User</h2>
-            <p className="mt-1 text-sm text-gray-500">Create account directly, then user can sign in and use password reset anytime.</p>
+            <p className="mt-1 text-sm text-gray-500">Create account and automatically send a reset-password email so user sets their own password.</p>
 
             <form onSubmit={handleRegisterUser} className="mt-4 space-y-4">
               <div>
@@ -448,17 +351,17 @@ const AdminUsersPage = () => {
               </div>
 
               <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">Temporary Password</label>
-                <input
-                  type="password"
-                  name="register_user_temp_password"
-                  autoComplete="new-password"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm((prev) => ({ ...prev, password: e.target.value }))}
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Custom Message (optional)</label>
+                <textarea
+                  value={registerForm.customMessage}
+                  onChange={(e) => setRegisterForm((prev) => ({ ...prev, customMessage: e.target.value }))}
                   className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  placeholder="Minimum 8 characters"
+                  placeholder="Welcome to FoodiefyCo Admin. Please use the reset link to set your password."
+                  rows={3}
+                  maxLength={300}
                   disabled={working}
                 />
+                <p className="mt-1 text-xs text-gray-500">This message will be shown after user follows the reset/login link.</p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -475,16 +378,6 @@ const AdminUsersPage = () => {
                     ))}
                   </select>
                 </div>
-
-                <label className="mt-7 inline-flex items-center gap-2 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={registerForm.emailConfirm}
-                    onChange={(e) => setRegisterForm((prev) => ({ ...prev, emailConfirm: e.target.checked }))}
-                    disabled={working}
-                  />
-                  Email confirmed
-                </label>
               </div>
 
               <div className="flex flex-wrap gap-2">
