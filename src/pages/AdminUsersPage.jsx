@@ -11,6 +11,14 @@ const ROLE_OPTIONS = [
   { value: 'viewer', label: 'Viewer' },
 ];
 
+const ROLE_RANK = {
+  owner: 0,
+  admin: 1,
+  staff_ops: 2,
+  finance: 3,
+  viewer: 4,
+};
+
 const DEFAULT_INVITE_FORM = {
   email: '',
   role: 'viewer',
@@ -56,6 +64,21 @@ const AdminUsersPage = () => {
       result[item.value] = users.filter((user) => (user.role || 'viewer') === item.value).length;
     });
     return result;
+  }, [users]);
+
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      const roleA = String(a.role || 'viewer');
+      const roleB = String(b.role || 'viewer');
+      const rankA = Number.isFinite(ROLE_RANK[roleA]) ? ROLE_RANK[roleA] : 99;
+      const rankB = Number.isFinite(ROLE_RANK[roleB]) ? ROLE_RANK[roleB] : 99;
+
+      if (rankA !== rankB) return rankA - rankB;
+
+      const emailA = String(a.email || '').toLowerCase();
+      const emailB = String(b.email || '').toLowerCase();
+      return emailA.localeCompare(emailB);
+    });
   }, [users]);
 
   const getAuthHeaders = async () => {
@@ -496,7 +519,7 @@ const AdminUsersPage = () => {
           </div>
 
           <div className="space-y-3 md:hidden">
-            {users.map((user) => (
+            {sortedUsers.map((user) => (
               <div key={`mobile-${user.id}`} className="rounded-xl border border-gray-200 p-4">
                 <p className="text-sm font-semibold text-gray-900 break-all">{user.email || '-'}</p>
                 <div className="mt-2 text-xs text-gray-600">
@@ -562,7 +585,7 @@ const AdminUsersPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => (
+                {sortedUsers.map((user) => (
                   <tr key={user.id} className="border-b align-top">
                     <td className="px-3 py-3 text-gray-800">{user.email || '-'}</td>
                     <td className="px-3 py-3">
