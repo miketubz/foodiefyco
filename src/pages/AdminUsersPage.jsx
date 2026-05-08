@@ -495,7 +495,61 @@ const AdminUsersPage = () => {
             ))}
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="space-y-3 md:hidden">
+            {users.map((user) => (
+              <div key={`mobile-${user.id}`} className="rounded-xl border border-gray-200 p-4">
+                <p className="text-sm font-semibold text-gray-900 break-all">{user.email || '-'}</p>
+                <div className="mt-2 text-xs text-gray-600">
+                  <p><span className="font-semibold">Created:</span> {formatDateTime(user.createdAt)}</p>
+                  <p className="mt-1"><span className="font-semibold">Last Sign In:</span> {formatDateTime(user.lastSignInAt)}</p>
+                  <p className="mt-1"><span className="font-semibold">Email Confirmed:</span> {user.isEmailConfirmed ? 'Yes' : 'No'}</p>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${roleStyle(user.role)}`}>
+                    {(ROLE_OPTIONS.find((r) => r.value === user.role)?.label) || 'Viewer'}
+                  </span>
+                  <select
+                    value={roleDraftByUserId[user.id] || user.role || 'viewer'}
+                    onChange={(e) => setRoleDraftByUserId((prev) => ({ ...prev, [user.id]: e.target.value }))}
+                    className="w-full rounded-md border border-gray-300 px-2 py-2 text-sm"
+                    disabled={working}
+                  >
+                    {ROLE_OPTIONS.map((role) => (
+                      <option key={`mobile-${user.id}-${role.value}`} value={role.value}>{role.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUpdateRole(user.id)}
+                    className="rounded-md bg-indigo-600 px-3 py-2 text-xs text-white hover:bg-indigo-700 disabled:bg-gray-300"
+                    disabled={working}
+                  >
+                    Save Role
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendReset(user.email)}
+                    className="rounded-md bg-amber-600 px-3 py-2 text-xs text-white hover:bg-amber-700 disabled:bg-gray-300"
+                    disabled={working || !user.email}
+                  >
+                    Send Reset
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {!loadingUsers && users.length === 0 && (
+              <div className="rounded-xl border border-gray-200 px-3 py-6 text-center text-gray-500">
+                No users found or insufficient permissions to load user list.
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[980px] text-sm">
               <thead className="bg-gray-100">
                 <tr>
