@@ -48,6 +48,7 @@ const AdminUsersPage = () => {
   const [registerForm, setRegisterForm] = useState(DEFAULT_REGISTER_FORM);
   const [resetEmail, setResetEmail] = useState('');
   const [roleDraftByUserId, setRoleDraftByUserId] = useState({});
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const usersByRole = useMemo(() => {
     const result = {};
@@ -246,12 +247,53 @@ const AdminUsersPage = () => {
             <Link to="/admin" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">
               Admin Dashboard
             </Link>
-            <Link to="/admin/help" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">
+            <button
+              type="button"
+              onClick={() => setShowHelpModal(true)}
+              className="rounded-md bg-blue-600 px-4 py-2 text-white shadow hover:bg-blue-700"
+            >
               Help
+            </button>
+            <Link to="/admin/help" className="rounded-md bg-white px-4 py-2 text-gray-700 shadow hover:bg-gray-100">
+              Admin Help Page
             </Link>
             <AdminThemeSwitcher />
           </div>
         </div>
+
+        {showHelpModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowHelpModal(false);
+            }}
+          >
+            <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+              <h2 className="text-xl font-bold text-gray-900">User Management Help</h2>
+              <p className="mt-2 text-sm text-gray-600">
+                This page is designed to be non-destructive by default. Existing users are only changed when you trigger a specific action.
+              </p>
+
+              <div className="mt-4 space-y-3 text-sm text-gray-700">
+                <p><span className="font-semibold">Invite User:</span> Sends an email invite so the user sets their own password.</p>
+                <p><span className="font-semibold">Register User:</span> Creates a user directly with temporary password.</p>
+                <p><span className="font-semibold">Send Reset:</span> Sends password reset link to an existing user email.</p>
+                <p><span className="font-semibold">Save Role:</span> Updates only that selected user role.</p>
+                <p><span className="font-semibold">Safety:</span> No existing user is changed unless you click Invite, Create, Send Reset, or Save Role.</p>
+              </div>
+
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowHelpModal(false)}
+                  className="rounded-md bg-gray-900 px-4 py-2 text-white hover:bg-gray-800"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
           <section className="rounded-2xl bg-white p-6 shadow">
