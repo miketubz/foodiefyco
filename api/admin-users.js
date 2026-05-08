@@ -54,6 +54,30 @@ const parseBody = (req) => {
   }
 };
 
+const normalizeBaseUrl = (value) => String(value || '').trim().replace(/\/$/, '');
+
+const getBaseUrlFromRequest = (req) => {
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').trim();
+  if (!host) return '';
+
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').trim().toLowerCase();
+  const isLocalHost = host.includes('localhost') || host.startsWith('127.0.0.1');
+  const proto = forwardedProto || (isLocalHost ? 'http' : 'https');
+  return `${proto}://${host}`;
+};
+
+const getTrustedAppBaseUrl = (req) => {
+  const envBaseUrl = normalizeBaseUrl(
+    process.env.PUBLIC_APP_URL
+    || process.env.APP_BASE_URL
+    || process.env.NEXT_PUBLIC_APP_URL
+    || process.env.VITE_PUBLIC_APP_URL
+  );
+
+  if (envBaseUrl) return envBaseUrl;
+  return normalizeBaseUrl(getBaseUrlFromRequest(req));
+};
+
 const mapUser = (user) => ({
   id: user.id,
   email: user.email || '',
@@ -164,7 +188,8 @@ export default async function handler(req, res) {
   if (action === 'invite') {
     const email = String(body.email || '').trim().toLowerCase();
     const role = normalizeRole(body.role);
-    const redirectTo = String(body.redirectTo || '').trim() || undefined;
+    const appBaseUrl = getTrustedAppBaseUrl(req);
+    const redirectTo = appBaseUrl ? `${appBaseUrl}/admin/login` : undefined;
 
     if (!email) {
       return json(res, 400, { error: 'Email is required.' });
@@ -226,7 +251,8 @@ export default async function handler(req, res) {
 
   if (action === 'reset') {
     const email = String(body.email || '').trim().toLowerCase();
-    const redirectTo = String(body.redirectTo || '').trim() || undefined;
+    const appBaseUrl = getTrustedAppBaseUrl(req);
+    const redirectTo = appBaseUrl ? `${appBaseUrl}/admin/login` : undefined;
 
     if (!email) {
       return json(res, 400, { error: 'Email is required.' });
