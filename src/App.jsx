@@ -7,6 +7,7 @@ import AdminExternalPage from './pages/AdminExternalPage';
 import AdminGalleryPage from './pages/AdminGalleryPage';
 import AdminHelpPage from './pages/AdminHelpPage';
 import AdminLoginPage from './pages/AdminLoginPage';
+import AdminUsersPage from './pages/AdminUsersPage';
 import ArchivePage from './pages/ArchivePage';
 import ExpenseTrackerPage from './pages/ExpenseTrackerPage';
 import FrontendPage from './pages/FrontendPage';
@@ -82,6 +83,14 @@ function App() {
         element={(
           <RequireAdmin>
             <AdminGalleryPage />
+          </RequireAdmin>
+        )}
+      />
+      <Route
+        path="/admin/users"
+        element={(
+          <RequireAdmin>
+            <AdminUsersPage />
           </RequireAdmin>
         )}
       />

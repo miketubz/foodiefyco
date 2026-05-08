@@ -11,7 +11,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!assets/|pix/|favicon.ico|robots.txt|manifest.json).*)",
+      "source": "/((?!api/|assets/|pix/|favicon.ico|robots.txt|manifest.json).*)",
       "destination": "/index.html"
     }
   ]
