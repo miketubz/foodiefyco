@@ -54,6 +54,7 @@ const AdminUsersPage = () => {
   const [actorRole, setActorRole] = useState('admin');
   const [actorId, setActorId] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [showTempPassword, setShowTempPassword] = useState(false);
 
   const isOwner = actorRole === 'owner';
 
@@ -355,16 +356,40 @@ const AdminUsersPage = () => {
 
               <div>
                 <label className="mb-1 block text-sm font-semibold text-gray-700">Temporary Password (optional)</label>
-                <input
-                  type="password"
-                  name="register_user_temp_password"
-                  autoComplete="new-password"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm((prev) => ({ ...prev, password: e.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2"
-                  placeholder="Leave blank to auto-generate"
-                  disabled={working}
-                />
+                <div className="relative">
+                  <input
+                    type={showTempPassword ? 'text' : 'password'}
+                    name="register_user_temp_password"
+                    autoComplete="new-password"
+                    value={registerForm.password}
+                    onChange={(e) => setRegisterForm((prev) => ({ ...prev, password: e.target.value }))}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 pr-10"
+                    placeholder="Leave blank to auto-generate"
+                    disabled={working}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowTempPassword((prev) => !prev)}
+                    className="absolute inset-y-0 right-0 inline-flex items-center justify-center px-3 text-gray-500 hover:text-gray-700"
+                    aria-label={showTempPassword ? 'Hide temporary password' : 'Show temporary password'}
+                    title={showTempPassword ? 'Hide temporary password' : 'Show temporary password'}
+                    disabled={working}
+                  >
+                    {showTempPassword ? (
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M3 3l18 18" />
+                        <path d="M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58" />
+                        <path d="M9.88 5.09A9.77 9.77 0 0112 5c5 0 9 4.5 9 7-1.06 2.09-2.6 3.8-4.41 4.96" />
+                        <path d="M6.1 6.1C4.29 7.27 2.77 8.95 1.73 11 2.79 13.09 4.33 14.8 6.14 15.96" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path d="M1.73 12C2.79 9.91 6.03 6 12 6s9.21 3.91 10.27 6c-1.06 2.09-4.3 6-10.27 6S2.79 14.09 1.73 12z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 <p className="mt-1 text-xs text-gray-500">If provided, must be at least 8 characters. A reset-password email is still sent.</p>
               </div>
 
