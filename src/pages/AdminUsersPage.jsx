@@ -21,6 +21,7 @@ const ROLE_RANK = {
 
 const DEFAULT_REGISTER_FORM = {
   email: '',
+  password: '',
   role: 'viewer',
   customMessage: '',
 };
@@ -147,6 +148,7 @@ const AdminUsersPage = () => {
     try {
       const email = String(registerForm.email || '').trim().toLowerCase();
       const customMessage = String(registerForm.customMessage || '').trim();
+      const password = String(registerForm.password || '');
 
       if (!email) {
         throw new Error('Register email is required.');
@@ -155,6 +157,7 @@ const AdminUsersPage = () => {
       const result = await callUsersApi('POST', {
         action: 'register',
         email,
+        password,
         role: registerForm.role,
         customMessage,
       });
@@ -351,6 +354,21 @@ const AdminUsersPage = () => {
               </div>
 
               <div>
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Temporary Password (optional)</label>
+                <input
+                  type="password"
+                  name="register_user_temp_password"
+                  autoComplete="new-password"
+                  value={registerForm.password}
+                  onChange={(e) => setRegisterForm((prev) => ({ ...prev, password: e.target.value }))}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  placeholder="Leave blank to auto-generate"
+                  disabled={working}
+                />
+                <p className="mt-1 text-xs text-gray-500">If provided, must be at least 8 characters. A reset-password email is still sent.</p>
+              </div>
+
+              <div>
                 <label className="mb-1 block text-sm font-semibold text-gray-700">Custom Message (optional)</label>
                 <textarea
                   value={registerForm.customMessage}
@@ -387,6 +405,14 @@ const AdminUsersPage = () => {
                   disabled={working}
                 >
                   Create User
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSendReset(registerForm.email)}
+                  className="rounded-md bg-amber-600 px-4 py-2 text-white hover:bg-amber-700 disabled:bg-gray-300"
+                  disabled={working || !String(registerForm.email || '').trim()}
+                >
+                  Send Reset Email
                 </button>
                 <button
                   type="button"

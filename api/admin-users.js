@@ -236,6 +236,7 @@ export default async function handler(req, res) {
 
   if (action === 'register') {
     const email = String(body.email || '').trim().toLowerCase();
+    const passwordRaw = String(body.password || '');
     const role = normalizeRole(body.role);
     const customMessage = String(body.customMessage || '').trim().slice(0, 300);
     const appBaseUrl = getTrustedAppBaseUrl(req);
@@ -249,9 +250,15 @@ export default async function handler(req, res) {
       return json(res, 400, { error: 'Email is required.' });
     }
 
+    if (passwordRaw && passwordRaw.length < 8) {
+      return json(res, 400, { error: 'Temporary password must be at least 8 characters.' });
+    }
+
+    const passwordToUse = passwordRaw || generateTempPassword();
+
     const { data, error } = await serviceClient.auth.admin.createUser({
       email,
-      password: generateTempPassword(),
+      password: passwordToUse,
       email_confirm: true,
       user_metadata: {
         role,
