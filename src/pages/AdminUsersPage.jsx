@@ -545,7 +545,7 @@ const AdminUsersPage = () => {
                   </label>
                 )}
                 <p className="text-sm font-semibold text-gray-900 break-all">{user.email || '-'}</p>
-                <div className="mt-2 text-xs text-gray-600">
+                <div className="mt-2 text-xs text-gray-700">
                   <p><span className="font-semibold">Created:</span> {formatDateTime(user.createdAt)}</p>
                   <p className="mt-1"><span className="font-semibold">Last Sign In:</span> {formatDateTime(user.lastSignInAt)}</p>
                   <p className="mt-1"><span className="font-semibold">Email Confirmed:</span> {user.isEmailConfirmed ? 'Yes' : 'No'}</p>
@@ -621,7 +621,7 @@ const AdminUsersPage = () => {
                         />
                       </td>
                     )}
-                    <td className="px-3 py-3 text-gray-800">{user.email || '-'}</td>
+                    <td className="px-3 py-3 text-gray-900">{user.email || '-'}</td>
                     <td className="px-3 py-3">
                       <span className={`mr-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${roleStyle(user.role)}`}>
                         {(ROLE_OPTIONS.find((r) => r.value === user.role)?.label) || 'Viewer'}
@@ -637,8 +637,8 @@ const AdminUsersPage = () => {
                         ))}
                       </select>
                     </td>
-                    <td className="px-3 py-3 text-gray-600">{formatDateTime(user.createdAt)}</td>
-                    <td className="px-3 py-3 text-gray-600">{formatDateTime(user.lastSignInAt)}</td>
+                    <td className="px-3 py-3 text-gray-700">{formatDateTime(user.createdAt)}</td>
+                    <td className="px-3 py-3 text-gray-700">{formatDateTime(user.lastSignInAt)}</td>
                     <td className="px-3 py-3 text-center text-gray-700">{user.isEmailConfirmed ? 'Yes' : 'No'}</td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap justify-center gap-2">
