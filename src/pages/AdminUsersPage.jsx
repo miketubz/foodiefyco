@@ -305,6 +305,8 @@ const AdminUsersPage = () => {
                 <label className="mb-1 block text-sm font-semibold text-gray-700">Email</label>
                 <input
                   type="email"
+                  name="invite_user_email"
+                  autoComplete="off"
                   value={inviteForm.email}
                   onChange={(e) => setInviteForm((prev) => ({ ...prev, email: e.target.value }))}
                   className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -327,13 +329,23 @@ const AdminUsersPage = () => {
                 </select>
               </div>
 
-              <button
-                type="submit"
-                className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:bg-gray-300"
-                disabled={working}
-              >
-                Send Invite
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  className="rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 disabled:bg-gray-300"
+                  disabled={working}
+                >
+                  Send Invite
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInviteForm(DEFAULT_INVITE_FORM)}
+                  className="rounded-md bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200 disabled:bg-gray-200"
+                  disabled={working}
+                >
+                  Clear
+                </button>
+              </div>
             </form>
           </section>
 
@@ -346,6 +358,8 @@ const AdminUsersPage = () => {
                 <label className="mb-1 block text-sm font-semibold text-gray-700">Email</label>
                 <input
                   type="email"
+                  name="register_user_email"
+                  autoComplete="off"
                   value={registerForm.email}
                   onChange={(e) => setRegisterForm((prev) => ({ ...prev, email: e.target.value }))}
                   className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -358,6 +372,8 @@ const AdminUsersPage = () => {
                 <label className="mb-1 block text-sm font-semibold text-gray-700">Temporary Password</label>
                 <input
                   type="password"
+                  name="register_user_temp_password"
+                  autoComplete="new-password"
                   value={registerForm.password}
                   onChange={(e) => setRegisterForm((prev) => ({ ...prev, password: e.target.value }))}
                   className="w-full rounded-md border border-gray-300 px-3 py-2"
@@ -392,13 +408,23 @@ const AdminUsersPage = () => {
                 </label>
               </div>
 
-              <button
-                type="submit"
-                className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-300"
-                disabled={working}
-              >
-                Create User
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:bg-gray-300"
+                  disabled={working}
+                >
+                  Create User
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRegisterForm(DEFAULT_REGISTER_FORM)}
+                  className="rounded-md bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200 disabled:bg-gray-200"
+                  disabled={working}
+                >
+                  Clear
+                </button>
+              </div>
             </form>
           </section>
         </div>
@@ -410,12 +436,22 @@ const AdminUsersPage = () => {
           <div className="mt-4 flex flex-col gap-3 sm:flex-row">
             <input
               type="email"
+              name="reset_user_email"
+              autoComplete="off"
               value={resetEmail}
               onChange={(e) => setResetEmail(e.target.value)}
               className="w-full rounded-md border border-gray-300 px-3 py-2"
               placeholder="user@example.com"
               disabled={working}
             />
+            <button
+              type="button"
+              onClick={() => setResetEmail('')}
+              className="rounded-md bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200 disabled:bg-gray-300"
+              disabled={working}
+            >
+              Clear
+            </button>
             <button
               type="button"
               onClick={() => handleSendReset('')}
