@@ -57,6 +57,11 @@ const AdminUsersPage = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [roleDraftByUserId, setRoleDraftByUserId] = useState({});
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [actorRole, setActorRole] = useState('admin');
+  const [actorId, setActorId] = useState('');
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+
+  const isOwner = actorRole === 'owner';
 
   const usersByRole = useMemo(() => {
     const result = {};
@@ -121,9 +126,12 @@ const AdminUsersPage = () => {
       const data = await callUsersApi('GET');
       const nextUsers = data.users || [];
       setUsers(nextUsers);
+      setActorRole(String(data.actorRole || 'admin'));
+      setActorId(String(data.actorId || ''));
       setRoleDraftByUserId(
         Object.fromEntries(nextUsers.map((user) => [user.id, user.role || 'viewer']))
       );
+      setSelectedUserIds((prev) => prev.filter((id) => nextUsers.some((user) => user.id === id)));
     } catch (err) {
       setErrorMessage(err.message || 'Failed to load users.');
       setUsers([]);
@@ -250,6 +258,54 @@ const AdminUsersPage = () => {
       await loadUsers();
     } catch (err) {
       setErrorMessage(err.message || 'Failed to update role.');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const toggleSelectUser = (userId) => {
+    setSelectedUserIds((prev) => (
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    ));
+  };
+
+  const handleRemoveSelected = async () => {
+    if (!isOwner) {
+      setErrorMessage('Only owner can remove users.');
+      return;
+    }
+
+    if (!selectedUserIds.length) {
+      setErrorMessage('Select at least one user to remove.');
+      return;
+    }
+
+    const selectedEmails = sortedUsers
+      .filter((user) => selectedUserIds.includes(user.id))
+      .map((user) => user.email)
+      .filter(Boolean)
+      .join(', ');
+
+    const confirmed = window.confirm(
+      `Remove ${selectedUserIds.length} selected user(s)?\n\n${selectedEmails || ''}\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setWorking(true);
+    setSuccessMessage('');
+    setErrorMessage('');
+
+    try {
+      const result = await callUsersApi('POST', {
+        action: 'delete-users',
+        userIds: selectedUserIds,
+      });
+
+      setSuccessMessage(result.message || 'Selected users removed.');
+      setSelectedUserIds([]);
+      await loadUsers();
+    } catch (err) {
+      setErrorMessage(err.message || 'Failed to remove selected users.');
     } finally {
       setWorking(false);
     }
@@ -500,14 +556,26 @@ const AdminUsersPage = () => {
         <section className="rounded-2xl bg-white p-6 shadow">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-xl font-semibold text-gray-800">Users</h2>
-            <button
-              type="button"
-              onClick={loadUsers}
-              disabled={loadingUsers || working}
-              className="rounded-md bg-gray-900 px-4 py-2 text-white hover:bg-gray-800 disabled:bg-gray-300"
-            >
-              {loadingUsers ? 'Loading...' : 'Refresh'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={handleRemoveSelected}
+                  disabled={working || !selectedUserIds.length}
+                  className="rounded-md bg-red-600 px-4 py-2 text-white hover:bg-red-700 disabled:bg-gray-300"
+                >
+                  Remove Selected ({selectedUserIds.length})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={loadUsers}
+                disabled={loadingUsers || working}
+                className="rounded-md bg-gray-900 px-4 py-2 text-white hover:bg-gray-800 disabled:bg-gray-300"
+              >
+                {loadingUsers ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
           </div>
 
           <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -521,6 +589,17 @@ const AdminUsersPage = () => {
           <div className="space-y-3 md:hidden">
             {sortedUsers.map((user) => (
               <div key={`mobile-${user.id}`} className="rounded-xl border border-gray-200 p-4">
+                {isOwner && (
+                  <label className="mb-2 inline-flex items-center gap-2 text-xs text-gray-600">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.includes(user.id)}
+                      onChange={() => toggleSelectUser(user.id)}
+                      disabled={working || user.id === actorId}
+                    />
+                    Select for remove
+                  </label>
+                )}
                 <p className="text-sm font-semibold text-gray-900 break-all">{user.email || '-'}</p>
                 <div className="mt-2 text-xs text-gray-600">
                   <p><span className="font-semibold">Created:</span> {formatDateTime(user.createdAt)}</p>
@@ -576,6 +655,7 @@ const AdminUsersPage = () => {
             <table className="w-full min-w-[980px] text-sm">
               <thead className="bg-gray-100">
                 <tr>
+                  {isOwner && <th className="px-3 py-2 text-center">Select</th>}
                   <th className="px-3 py-2 text-left">Email</th>
                   <th className="px-3 py-2 text-left">Role</th>
                   <th className="px-3 py-2 text-left">Created</th>
@@ -587,6 +667,16 @@ const AdminUsersPage = () => {
               <tbody>
                 {sortedUsers.map((user) => (
                   <tr key={user.id} className="border-b align-top">
+                    {isOwner && (
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedUserIds.includes(user.id)}
+                          onChange={() => toggleSelectUser(user.id)}
+                          disabled={working || user.id === actorId}
+                        />
+                      </td>
+                    )}
                     <td className="px-3 py-3 text-gray-800">{user.email || '-'}</td>
                     <td className="px-3 py-3">
                       <span className={`mr-2 inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${roleStyle(user.role)}`}>
@@ -630,7 +720,7 @@ const AdminUsersPage = () => {
                 ))}
                 {!loadingUsers && users.length === 0 && (
                   <tr>
-                    <td className="px-3 py-6 text-center text-gray-500" colSpan="6">
+                    <td className="px-3 py-6 text-center text-gray-500" colSpan={isOwner ? 7 : 6}>
                       No users found or insufficient permissions to load user list.
                     </td>
                   </tr>

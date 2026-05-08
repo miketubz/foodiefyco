@@ -88,6 +88,11 @@ const mapUser = (user) => ({
   isBanned: Boolean(user.banned_until),
 });
 
+const resolveRole = (value) => {
+  const role = String(value || '').trim().toLowerCase();
+  return ROLE_OPTIONS.has(role) ? role : '';
+};
+
 const ensureAdmin = async (req, env) => {
   const token = getBearerToken(req);
   if (!token) {
@@ -115,10 +120,17 @@ const ensureAdmin = async (req, env) => {
     return { ok: false, status: 403, message: 'Only admin users can access user management.' };
   }
 
+  const { data: actorUserData } = await serviceClient.auth.admin.getUserById(userData.user.id);
+  const actorRole =
+    resolveRole(actorUserData?.user?.app_metadata?.role)
+    || resolveRole(actorUserData?.user?.user_metadata?.role)
+    || 'admin';
+
   return {
     ok: true,
     serviceClient,
     actorId: userData.user.id,
+    actorRole,
   };
 };
 
@@ -161,7 +173,7 @@ export default async function handler(req, res) {
     return json(res, auth.status, { error: auth.message });
   }
 
-  const { serviceClient } = auth;
+  const { serviceClient, actorId, actorRole } = auth;
 
   if (req.method === 'GET') {
     const page = Number(req.query?.page || 1);
@@ -179,6 +191,8 @@ export default async function handler(req, res) {
     return json(res, 200, {
       users: (data?.users || []).map(mapUser),
       total: data?.total || 0,
+      actorRole,
+      actorId,
     });
   }
 
@@ -285,6 +299,43 @@ export default async function handler(req, res) {
     return json(res, 200, {
       message: 'User role updated.',
       role,
+    });
+  }
+
+  if (action === 'delete-users') {
+    if (actorRole !== 'owner') {
+      return json(res, 403, { error: 'Only owner can remove users.' });
+    }
+
+    const idsRaw = Array.isArray(body.userIds) ? body.userIds : [];
+    const userIds = [...new Set(idsRaw.map((id) => String(id || '').trim()).filter(Boolean))];
+
+    if (!userIds.length) {
+      return json(res, 400, { error: 'No user IDs provided.' });
+    }
+
+    if (userIds.includes(actorId)) {
+      return json(res, 400, { error: 'Owner cannot remove the currently signed-in account.' });
+    }
+
+    const failed = [];
+    for (const userId of userIds) {
+      const { error } = await serviceClient.auth.admin.deleteUser(userId);
+      if (error) {
+        failed.push({ userId, error: error.message });
+      }
+    }
+
+    if (failed.length) {
+      return json(res, 400, {
+        error: 'Some users could not be removed.',
+        failed,
+      });
+    }
+
+    return json(res, 200, {
+      message: `${userIds.length} user(s) removed.`,
+      removedIds: userIds,
     });
   }
 
