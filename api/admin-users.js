@@ -3,19 +3,24 @@ import { createClient } from '@supabase/supabase-js';
 const ROLE_OPTIONS = new Set(['owner', 'admin', 'staff_ops', 'finance', 'viewer']);
 
 const getEnv = () => {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const url = process.env.SUPABASE_URL
+    || process.env.SUPABASE_PROJECT_URL
+    || process.env.NEXT_PUBLIC_SUPABASE_URL
+    || process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !anonKey || !serviceRoleKey) {
+  const missing = [];
+  if (!url) missing.push('SUPABASE_URL');
+  if (!serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+
+  if (missing.length) {
     return {
-      error: 'Missing SUPABASE_URL, SUPABASE_ANON_KEY (or VITE_ variants), or SUPABASE_SERVICE_ROLE_KEY in Vercel env.',
+      error: `Missing required Vercel env: ${missing.join(', ')}.`,
     };
   }
 
   return {
     url,
-    anonKey,
     serviceRoleKey,
   };
 };
@@ -65,10 +70,9 @@ const ensureAdmin = async (req, env) => {
     return { ok: false, status: 401, message: 'Missing Authorization bearer token.' };
   }
 
-  const anonClient = createClient(env.url, env.anonKey);
   const serviceClient = createClient(env.url, env.serviceRoleKey);
 
-  const { data: userData, error: userError } = await anonClient.auth.getUser(token);
+  const { data: userData, error: userError } = await serviceClient.auth.getUser(token);
   if (userError || !userData?.user?.id) {
     return { ok: false, status: 401, message: 'Invalid or expired session token.' };
   }
@@ -90,7 +94,6 @@ const ensureAdmin = async (req, env) => {
   return {
     ok: true,
     serviceClient,
-    anonClient,
     actorId: userData.user.id,
   };
 };
@@ -134,7 +137,7 @@ export default async function handler(req, res) {
     return json(res, auth.status, { error: auth.message });
   }
 
-  const { serviceClient, anonClient } = auth;
+  const { serviceClient } = auth;
 
   if (req.method === 'GET') {
     const page = Number(req.query?.page || 1);
@@ -229,7 +232,7 @@ export default async function handler(req, res) {
       return json(res, 400, { error: 'Email is required.' });
     }
 
-    const { error } = await anonClient.auth.resetPasswordForEmail(email, {
+    const { error } = await serviceClient.auth.resetPasswordForEmail(email, {
       redirectTo,
     });
 
