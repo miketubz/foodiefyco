@@ -16,6 +16,7 @@ export default function MenuAdminPanel() {
     name: '',
     price: '',
     category: '',
+    description: '',
     image_url: '',
     sort_order: 0,
     is_available: true,
@@ -29,7 +30,7 @@ export default function MenuAdminPanel() {
 
     const { data, error } = await supabase
       .from('menu_item')
-      .select('id, name, price, category, image_url, is_available, sort_order, is_featured')
+      .select('id, name, price, category, image_url, is_available, sort_order, is_featured, description')
       .order('sort_order', { ascending: true })
       .order('id', { ascending: true });
 
@@ -80,6 +81,7 @@ export default function MenuAdminPanel() {
         name: newItem.name.trim(),
         price: Number(newItem.price),
         category: newItem.category.trim(),
+        description: newItem.description.trim(),
         image_url: newItem.image_url.trim(),
         sort_order: Number(newItem.sort_order) || 0,
         is_available: newItem.is_available,
@@ -95,6 +97,7 @@ export default function MenuAdminPanel() {
         name: '',
         price: '',
         category: '',
+        description: '',
         image_url: '',
         sort_order: 0,
         is_available: true,
@@ -117,6 +120,7 @@ export default function MenuAdminPanel() {
         name: item.name,
         price: Number(item.price),
         category: item.category,
+        description: item.description ?? '',
         image_url: item.image_url,
         sort_order: Number(item.sort_order) || 0,
         is_available: item.is_available,
@@ -268,6 +272,17 @@ export default function MenuAdminPanel() {
             </div>
           </div>
 
+          <div className="mt-4">
+            <label className="mb-2 block text-sm font-medium text-slate-700">Description</label>
+            <textarea
+              placeholder="Description"
+              value={newItem.description}
+              onChange={(e) => handleNewItemChange('description', e.target.value)}
+              rows={2}
+              className="w-full rounded-xl border border-slate-300 px-4 py-3"
+            />
+          </div>
+
           <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
               <input
@@ -410,6 +425,17 @@ export default function MenuAdminPanel() {
                       />
                     </div>
 
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-slate-700">Description</label>
+                      <textarea
+                        value={item.description || ''}
+                        onChange={(e) => handleChange(item.id, 'description', e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 px-4 py-3"
+                        placeholder="Description"
+                        rows={2}
+                      />
+                    </div>
+
                     <label className="flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">
                       <input
                         type="checkbox"
@@ -471,6 +497,7 @@ export default function MenuAdminPanel() {
                     <th className="px-4 py-3 text-left">Price</th>
                     <th className="px-4 py-3 text-left">Category</th>
                     <th className="px-4 py-3 text-left">Image URL</th>
+                    <th className="px-4 py-3 text-left">Description</th>
                     <th className="px-4 py-3 text-center">Preview</th>
                     <th className="px-4 py-3 text-center">Sort Order</th>
                     <th className="px-4 py-3 text-center">Available</th>
@@ -514,6 +541,15 @@ export default function MenuAdminPanel() {
                           value={item.image_url || ''}
                           onChange={(e) => handleChange(item.id, 'image_url', e.target.value)}
                           className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <textarea
+                          value={item.description || ''}
+                          onChange={(e) => handleChange(item.id, 'description', e.target.value)}
+                          className="w-full rounded-xl border border-slate-300 px-3 py-2"
+                          placeholder="Description"
+                          rows={2}
                         />
                       </td>
                       <td className="px-4 py-3 text-center">
