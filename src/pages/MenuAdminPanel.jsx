@@ -19,6 +19,7 @@ export default function MenuAdminPanel() {
     image_url: '',
     sort_order: 0,
     is_available: true,
+    is_featured: false,
   });
 
   const fetchMenuItems = async () => {
@@ -28,7 +29,7 @@ export default function MenuAdminPanel() {
 
     const { data, error } = await supabase
       .from('menu_item')
-      .select('id, name, price, category, image_url, is_available, sort_order')
+      .select('id, name, price, category, image_url, is_available, sort_order, is_featured')
       .order('sort_order', { ascending: true })
       .order('id', { ascending: true });
 
@@ -82,6 +83,7 @@ export default function MenuAdminPanel() {
         image_url: newItem.image_url.trim(),
         sort_order: Number(newItem.sort_order) || 0,
         is_available: newItem.is_available,
+        is_featured: newItem.is_featured,
       },
     ]);
 
@@ -96,6 +98,7 @@ export default function MenuAdminPanel() {
         image_url: '',
         sort_order: 0,
         is_available: true,
+        is_featured: false,
       });
       await fetchMenuItems();
     }
@@ -117,6 +120,7 @@ export default function MenuAdminPanel() {
         image_url: item.image_url,
         sort_order: Number(item.sort_order) || 0,
         is_available: item.is_available,
+        is_featured: item.is_featured ?? false,
       })
       .eq('id', item.id);
 
@@ -274,6 +278,15 @@ export default function MenuAdminPanel() {
               />
               Available
             </label>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={newItem.is_featured}
+                onChange={(e) => handleNewItemChange('is_featured', e.target.checked)}
+                className="h-4 w-4"
+              />
+              Featured
+            </label>
 
             <button
               onClick={handleCreate}
@@ -407,6 +420,16 @@ export default function MenuAdminPanel() {
                       Available
                     </label>
 
+                    <label className="flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={!!item.is_featured}
+                        onChange={(e) => handleChange(item.id, 'is_featured', e.target.checked)}
+                        className="h-4 w-4"
+                      />
+                      Featured
+                    </label>
+
                     {item.image_url ? (
                       <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
                         <p className="mb-2 text-sm text-slate-600">Preview</p>
@@ -451,6 +474,7 @@ export default function MenuAdminPanel() {
                     <th className="px-4 py-3 text-center">Preview</th>
                     <th className="px-4 py-3 text-center">Sort Order</th>
                     <th className="px-4 py-3 text-center">Available</th>
+                    <th className="px-4 py-3 text-center">Featured</th>
                     <th className="px-4 py-3 text-center">Save</th>
                     <th className="px-4 py-3 text-center">Delete</th>
                   </tr>
@@ -516,6 +540,14 @@ export default function MenuAdminPanel() {
                           type="checkbox"
                           checked={!!item.is_available}
                           onChange={(e) => handleChange(item.id, 'is_available', e.target.checked)}
+                          className="h-4 w-4"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          checked={!!item.is_featured}
+                          onChange={(e) => handleChange(item.id, 'is_featured', e.target.checked)}
                           className="h-4 w-4"
                         />
                       </td>

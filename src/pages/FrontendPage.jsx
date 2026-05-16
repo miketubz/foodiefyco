@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import MenuCard from '../components/MenuCard';
 import Cart from '../components/Cart';
+import FeaturedPromoModal from '../components/FeaturedPromoModal';
 import { useMenuItems } from '../hooks/useMenuItems';
 import { supabase } from '../lib/supabaseClient.js';
 
@@ -43,6 +44,7 @@ function FrontendPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [isFeaturedOpen, setIsFeaturedOpen] = useState(true);
 
   const subtotal = useMemo(
     () =>
@@ -65,6 +67,10 @@ function FrontendPage() {
     return uniqueCategories.sort((a, b) => a.localeCompare(b));
   }, [menuItems]);
 
+  const featuredItem = useMemo(
+    () => (menuItems || []).find((item) => item.is_featured) ?? null,
+    [menuItems]
+  );
   const filteredMenuItems = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -95,7 +101,6 @@ function FrontendPage() {
       setPaymentProofFile(null);
     }
   }, [paymentMethod]);
-
   useEffect(() => {
     const loadThankYouContent = async () => {
       try {
@@ -603,6 +608,14 @@ function FrontendPage() {
           isApplyingPromo={isApplyingPromo}
           promoMessage={promoMessage}
           promoError={promoError}
+        />
+      )}
+
+      {isFeaturedOpen && featuredItem && (
+        <FeaturedPromoModal
+          item={featuredItem}
+          onAddToCart={handleAddToCart}
+          onClose={() => setIsFeaturedOpen(false)}
         />
       )}
 
