@@ -19,9 +19,9 @@ function FeaturedPromoModal({ item, onAddToCart, onClose }) {
         aria-hidden="true"
       />
 
-      {/* Floating modal — centered on mobile, bottom-right on desktop */}
+      {/* Floating modal — centered on all screen sizes */}
       <div
-        className="fixed bottom-6 left-1/2 z-50 w-[90vw] max-w-sm -translate-x-1/2 rounded-3xl bg-white shadow-2xl ring-1 ring-gray-100 sm:bottom-8 sm:left-auto sm:right-8 sm:translate-x-0"
+        className="fixed left-1/2 top-1/2 z-50 w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white shadow-2xl ring-1 ring-gray-100 md:max-w-md lg:max-w-lg"
         role="dialog"
         aria-modal="true"
         aria-label={`Featured promo: ${item.name}`}
@@ -50,8 +50,17 @@ function FeaturedPromoModal({ item, onAddToCart, onClose }) {
             </div>
           )}
           {/* Promo badge */}
-          <div className="absolute left-3 top-3 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
-            ⭐ Featured
+          <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-orange-500 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white shadow">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="h-3.5 w-3.5"
+              aria-hidden="true"
+            >
+              <path d="M12 2.5l2.7 5.47 6.03.88-4.36 4.25 1.03 6-5.4-2.84-5.39 2.84 1.03-6-4.37-4.25 6.04-.88L12 2.5z" />
+            </svg>
+            Featured
           </div>
         </div>
 
@@ -60,7 +69,7 @@ function FeaturedPromoModal({ item, onAddToCart, onClose }) {
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-orange-500">
             {item.category || 'Promo'}
           </div>
-          <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="mb-2 flex items-start justify-between gap-2">
             <h3 className="text-lg font-bold text-gray-900 leading-snug">
               {item.name}
             </h3>
@@ -68,6 +77,12 @@ function FeaturedPromoModal({ item, onAddToCart, onClose }) {
               ₱{Number(item.price).toFixed(2)}
             </span>
           </div>
+
+          {item.description?.trim() && (
+            <p className="mb-3 text-sm text-gray-500 leading-relaxed">
+              {item.description.trim()}
+            </p>
+          )}
 
           <div className="flex gap-2">
             <button
